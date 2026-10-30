@@ -254,6 +254,9 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 .rating-note .down { color: var(--danger); font-weight: 600; }
 .bot-elo { font-size: .78rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
 .auth-form select { font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; }
+.hint-btn { border-color: #3fae4a; color: #3fae4a; }
+.hint-note { font-size: .9rem; font-weight: 600; color: #3fae4a; }
+.hint-note:empty { display: none; }
 .rules { margin: 0; font-size: .88rem; color: var(--muted); max-width: 65ch; }
 .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
@@ -297,6 +300,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
       <div class="card">
         <div class="status" id="status" aria-live="polite"></div>
         <div class="rating-note" id="ratingNote" aria-live="polite"></div>
+        <div class="hint-note" id="hintNote" aria-live="polite"></div>
         <div class="caps">
           <div id="capTop"></div>
           <div id="capBot"></div>
@@ -333,6 +337,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b" id="undoBtn" data-t="undo">Отменить ход</button>
           <button class="b" id="flipBtn" data-t="flip">Перевернуть</button>
           <button class="b" id="resignBtn" data-t="resign">Сдаться</button>
+          <button class="b hint-btn" id="hintBtn" data-t="hintBtn" hidden>Лучший ход</button>
         </div>
       </div>
 
@@ -373,6 +378,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
       <div class="card">
         <div class="status" id="ckStatus" aria-live="polite"></div>
         <div class="rating-note" id="ckRatingNote" aria-live="polite"></div>
+        <div class="hint-note" id="ckHintNote" aria-live="polite"></div>
         <div class="tag" id="ckLeft"></div>
       </div>
 
@@ -405,6 +411,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b primary" id="ckNew" data-t="newg">Новая партия</button>
           <button class="b" id="ckUndo" data-t="undo">Отменить ход</button>
           <button class="b" id="ckFlip" data-t="flip">Перевернуть</button>
+          <button class="b hint-btn" id="ckHintBtn" data-t="hintBtn" hidden>Лучший ход</button>
         </div>
       </div>
 
@@ -963,6 +970,7 @@ const I18N = {
     prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
+    hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
     rtFast: 'Партия без рейтинга: прошло меньше 15 секунд после прошлой.', rtFail: 'Не удалось сохранить рейтинг.',
@@ -1015,6 +1023,7 @@ const I18N = {
     prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
+    hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
     rtFast: 'Unrated game: less than 15 seconds since the last one.', rtFail: 'Could not save the rating.',
@@ -1492,6 +1501,22 @@ function finishRated() {
   setNote(t('rtSaving'));
   A().rate('chess', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
 }
+// ---------- Best-move hint (admin only) ----------
+// Full engine strength without the bot's randomness; using it makes the game unrated
+let adminHint = null;
+function showHint() {
+  if (!A() || !A().isAdmin() || thinking || gameResult().over || view !== null) return;
+  if (!rs.done && myRatedColor()) { rs.unrated = 'rtHint'; setNote(t('rtHint')); }
+  $('hintNote').textContent = t('hintThinking');
+  setTimeout(() => {
+    const ply = history.length;
+    const m = searchMove(G, G.b.filter(Boolean).length <= 10 ? 4 : 3, 0);
+    if (!m || history.length !== ply) return;
+    adminHint = { ply, from: m.from, to: m.to, text: fmt(san(G, m, legal(G))) };
+    render();
+  }, 30);
+}
+
 // Leaving a rated game half-way counts as a loss, so nobody dodges a bad position
 function abandonRated() {
   const me = myRatedColor();
@@ -1525,7 +1550,7 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
 function reset(keepFlip) {
   G = newGame(); history = []; keys = [posKey(G)]; sel = null; targets = []; pendingPromo = null; dropSq = -1;
   resigned = null; report = null; anToken++; view = null;
-  newRating(); setNote('');
+  newRating(); setNote(''); adminHint = null;
   if (!keepFlip) flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
   render(); maybeAI();
 }
@@ -1631,7 +1656,8 @@ function render() {
   const B = view === null ? G : positionAt(view);
   const lastIdx = view === null ? history.length - 1 : view;
   const last = lastIdx >= 0 ? history[lastIdx].m : null;
-  const bestHint = view !== null && report && report.plies[view] && !report.plies[view].isBest ? report.plies[view].best : null;
+  const liveHint = view === null && adminHint && adminHint.ply === history.length ? adminHint : null;
+  const bestHint = (view !== null && report && report.plies[view] && !report.plies[view].isBest ? report.plies[view].best : null) || liveHint;
   const chk = inCheck(B, B.turn) ? kingSq(B.b, B.turn) : -1;
   let html = '';
   for (let k = 0; k < 64; k++) {
@@ -1706,6 +1732,9 @@ function render() {
   $('onlineBox').hidden = !online();
   $('botElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
   $('ratingNote').innerHTML = ratingNote;
+  $('hintBtn').hidden = !(A() && A().isAdmin());
+  $('hintBtn').disabled = thinking || res.over || view !== null;
+  $('hintNote').textContent = liveHint && !res.over ? t('hintIs', { m: liveHint.text }) : '';
   renderReport();
 }
 
@@ -1729,6 +1758,8 @@ $('newBtn').addEventListener('click', () => {
 $('undoBtn').addEventListener('click', undo);
 $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
 $('resignBtn').addEventListener('click', resign);
+$('hintBtn').addEventListener('click', showHint);
+window.gambitAuth.onChange(() => render());
 function applyLang() {
   document.documentElement.lang = lang;
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
@@ -1972,6 +2003,20 @@ function finishRated() {
   setNote(t('rtSaving'));
   A().rate('checkers', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
 }
+// Best-move hint (admin only); using it makes the game unrated
+let adminHint = null;
+function showHint() {
+  if (!A() || !A().isAdmin() || thinking || result().over) return;
+  if (!rs.done && myRatedColor()) { rs.unrated = 'rtHint'; setNote(t('rtHint')); }
+  $('ckHintNote').textContent = t('hintThinking');
+  setTimeout(() => {
+    const ply = hist.length;
+    const m = searchMove(S.b, S.turn, 7, 0);
+    if (!m || hist.length !== ply) return;
+    adminHint = { ply, path: m.path, text: notation(m) };
+    render();
+  }, 30);
+}
 function abandonRated() {
   const me = myRatedColor();
   if (rs.done || rs.unrated || !me || !A() || !A().canPlay() || result().over) return;
@@ -2009,7 +2054,7 @@ function result() {
 function reset() {
   S = { b: initBoard(), turn: 'w', kc: 0 };
   hist = []; sel = null; targets = []; thinking = false;
-  newRating(); setNote('');
+  newRating(); setNote(''); adminHint = null;
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
   render(); maybeAI();
 }
@@ -2064,6 +2109,7 @@ function disc(p) {
 function render() {
   const res = result();
   const last = hist.length ? hist[hist.length - 1].m : null;
+  const liveHint = adminHint && adminHint.ply === hist.length && !res.over ? adminHint : null;
   const forced = !res.over && res.moves[0].caps.length > 0;
   const mustFrom = forced && sel === null && S.turn !== aiColor() ? new Set(res.moves.map(m => m.from)) : new Set();
   let html = '';
@@ -2072,6 +2118,7 @@ function render() {
     const cls = ['sq'];
     if ((r + c) % 2) cls.push('d');
     if (last && last.path.includes(i)) cls.push('last');
+    if (liveHint && (i === liveHint.path[0] || i === liveHint.path[liveHint.path.length - 1])) cls.push('hint');
     if (i === sel) cls.push('sel');
     if (mustFrom.has(i)) cls.push('must');
     if (targets.some(m => m.to === i)) cls.push('tgt');
@@ -2111,6 +2158,9 @@ function render() {
   $('ckOnlineBox').hidden = !online();
   $('ckBotElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
   $('ckRatingNote').innerHTML = ratingNote;
+  $('ckHintBtn').hidden = !(A() && A().isAdmin());
+  $('ckHintBtn').disabled = thinking || res.over;
+  $('ckHintNote').textContent = liveHint ? t('hintIs', { m: liveHint.text }) : '';
 }
 
 boardEl.addEventListener('click', e => {
@@ -2134,6 +2184,8 @@ levelSel.addEventListener('change', () => {
   render();
 });
 document.addEventListener('gambit-lang', render);
+$('ckHintBtn').addEventListener('click', showHint);
+window.gambitAuth.onChange(() => render());
 
 // ---------- Game switch ----------
 const tagEl = document.querySelector('header .tag');
