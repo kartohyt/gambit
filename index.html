@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Шахматы и русские шашки в браузере: против бота, вдвоём или онлайн с другом.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Гамбит</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: board as the hero on the left, a narrow "scoresheet" column on the right; stacks on phones. */
+:root {
+  --bg: #eceff3;
+  --panel: #ffffff;
+  --fg: #1a2130;
+  --muted: #5d6779;
+  --line: #d3d9e2;
+  --accent: #d9902b;
+  --sq-light: #dbe1e9;
+  --sq-dark: #6a83a3;
+  --frame: #2a3446;
+  --danger: #c8443a;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141c; --panel: #181e2a; --fg: #e6eaf1; --muted: #8f9aae; --line: #2a3344;
+    --accent: #f0a742; --frame: #070a10; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141c; --panel: #181e2a; --fg: #e6eaf1; --muted: #8f9aae; --line: #2a3344;
+  --accent: #f0a742; --frame: #070a10; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 1.9rem; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.tag { color: var(--muted); font-size: 0.85rem; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+@media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.board-wrap { width: 100%; max-width: 600px; justify-self: center; }
+.frame { background: var(--frame); padding: 10px; border-radius: 6px; box-shadow: 0 18px 40px -18px rgba(10, 20, 40, .55); }
+.board {
+  position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr));
+  aspect-ratio: 1; overflow: hidden; width: 100%; max-width: 100%; container-type: inline-size; user-select: none;
+}
+.sq {
+  position: relative; border: 0; padding: 0; margin: 0; display: grid; place-items: center;
+  min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden;
+  font: inherit; cursor: pointer; background: var(--sq-light); border-radius: 0;
+}
+.sq.d { background: var(--sq-dark); }
+.sq:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 2; }
+.sq.last::before { content: ""; position: absolute; inset: 0; background: rgba(240, 175, 60, .38); }
+.sq.sel::before { content: ""; position: absolute; inset: 0; background: rgba(240, 160, 40, .62); }
+.sq.check::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(220, 50, 40, .9) 0%, rgba(220, 50, 40, .4) 45%, transparent 75%); }
+.sq.tgt::after { content: ""; position: absolute; width: 28%; height: 28%; border-radius: 50%; background: rgba(20, 30, 50, .32); }
+.sq.tgt.cap::after { width: 86%; height: 86%; background: transparent; border: 5px solid rgba(20, 30, 50, .32); }
+.pc {
+  position: relative; z-index: 1; width: 86%; height: 86%; display: block; pointer-events: none;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .3));
+  stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round;
+}
+.pc.w { fill: #fbfaf6; stroke: #1b2230; }
+.pc.b { fill: #262d39; stroke: #0b0e14; }
+.pc .ln { fill: none; }
+.pc.b .ln { stroke: #aeb8c8; }
+.pc .eye { stroke: none; fill: #1b2230; }
+.pc.b .eye { fill: #aeb8c8; }
+.sq.drop .pc { animation: drop .16s ease-out; }
+@keyframes drop { from { transform: scale(1.18); } to { transform: scale(1); } }
+.co { position: absolute; font-family: var(--f-mono); font-size: 2.1cqw; font-weight: 600; pointer-events: none; z-index: 1; }
+.co.f { right: 4%; bottom: 2%; }
+.co.r { left: 4%; top: 2%; }
+.sq .co { color: var(--sq-dark); }
+.sq.d .co { color: var(--sq-light); }
+
+.promo {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center;
+  background: rgba(8, 12, 20, .55); backdrop-filter: blur(2px);
+}
+.promo-box { background: var(--panel); border-radius: 8px; padding: 14px; display: grid; gap: 10px; text-align: center; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+.promo-box p { margin: 0; font-weight: 600; }
+.promo-row { display: flex; gap: 8px; }
+.promo-row button { width: 13cqw; height: 13cqw; min-width: 48px; min-height: 48px; border-radius: 6px; border: 1px solid var(--line); background: var(--sq-light); cursor: pointer; display: grid; place-items: center; }
+.promo-row button:hover, .promo-row button:focus-visible { outline: 3px solid var(--accent); }
+
+.side { display: grid; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.status { font-family: var(--f-display); font-weight: 500; font-size: 1.05rem; line-height: 1.35; min-height: 2.7em; display: flex; align-items: center; gap: 10px; }
+.status .dot { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--fg); }
+.status .dot.w { background: #fbfaf6; }
+.status .dot.b { background: #1b2028; }
+.status.over { color: var(--accent); }
+.status.chk { color: var(--danger); }
+.caps { display: grid; gap: 4px; font-size: 1.25rem; line-height: 1.2; }
+.caps div { min-height: 1.5rem; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.caps .adv { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); margin-left: 4px; }
+.caps .pc { width: 1.5rem; height: 1.5rem; filter: none; }
+
+label.field { display: grid; gap: 4px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+select {
+  font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px;
+}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button.b {
+  font: inherit; font-weight: 600; font-size: .9rem; padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+}
+button.b.primary { background: var(--accent); border-color: var(--accent); color: #1a1408; }
+button.b:hover { filter: brightness(1.05); }
+button.b:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+button.b:disabled { opacity: .45; cursor: default; }
+
+.sheet-h { display: flex; justify-content: space-between; align-items: baseline; }
+.sheet-h h2 { margin: 0; font-family: var(--f-display); font-size: .9rem; font-weight: 500; }
+.sheet-h small { color: var(--muted); font-size: .75rem; }
+.moves {
+  font-family: var(--f-mono); font-size: .88rem; font-variant-numeric: tabular-nums; max-height: 260px; overflow-y: auto;
+  display: grid; grid-template-columns: 2.6em 1fr 1fr; row-gap: 2px; align-content: start;
+}
+.moves span { padding: 2px 4px; border-radius: 4px; }
+.moves .n { color: var(--muted); }
+.moves .cur { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.moves .empty { grid-column: 1 / -1; color: var(--muted); font-family: var(--f-body); }
+.mk { font-weight: 600; margin-left: 1px; }
+.mk.brill, .bdg.brill { --k: #1d9e98; }
+.mk.best, .bdg.best { --k: #4f9a35; }
+.mk.good, .bdg.good { --k: #8a95a6; }
+.mk.inacc, .bdg.inacc { --k: #d19a1f; }
+.mk.mist, .bdg.mist { --k: #e0742a; }
+.mk.blun, .bdg.blun { --k: #d23d36; }
+.mk { color: var(--k); }
+.bdg { display: inline-grid; place-items: center; min-width: 1.9em; height: 1.4em; padding: 0 4px; border-radius: 4px; background: var(--k); color: #fff; font-family: var(--f-mono); font-size: .75rem; font-weight: 600; }
+.rep { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.rep th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; text-align: right; padding: 0 2px 6px; }
+.rep td { padding: 4px 2px; border-top: 1px solid var(--line); }
+.rep td:not(:first-child) { text-align: right; font-family: var(--f-mono); }
+.rep td:first-child { display: flex; align-items: center; gap: 8px; }
+.rep .acc td { font-weight: 600; font-size: 1rem; border-top: 0; }
+.key { margin-top: 12px; display: grid; gap: 6px; font-size: .86rem; }
+.key h3 { margin: 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.key div { display: flex; gap: 8px; align-items: baseline; }
+.key b { font-family: var(--f-mono); font-weight: 600; }
+.key span.hint { color: var(--muted); }
+.sq.hint::after { content: ""; position: absolute; inset: 5%; border: 4px solid #3fae4a; border-radius: 4px; z-index: 2; }
+.review {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+}
+.rev-text { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .9rem; min-width: 0; }
+.rev-text b { font-family: var(--f-mono); }
+.rev-text .hint { color: var(--muted); }
+.moves button.mv {
+  font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: pointer;
+  padding: 2px 4px; border-radius: 4px;
+}
+.moves button.mv:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.moves button.mv.cur { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.moves button.mv:focus-visible, .km:focus-visible { outline: 2px solid var(--accent); }
+.km {
+  font: inherit; color: inherit; background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  display: flex; gap: 8px; align-items: baseline; text-align: left; padding: 4px 6px; margin: 0 -6px;
+}
+.km:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.km.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.key h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.lang { display: flex; gap: 4px; }
+.lang .b { padding: 4px 9px; font-size: .8rem; }
+.games { display: flex; gap: 4px; }
+.games .b[aria-pressed="true"], .lang .b[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.ck { position: relative; z-index: 1; width: 82%; height: 82%; display: block; pointer-events: none; stroke-width: 1.5; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .3)); }
+.ck.w { fill: #fbfaf6; stroke: #1b2230; }
+.ck.b { fill: #262d39; stroke: #0b0e14; }
+.ck .ln { fill: none; }
+.ck.w .ln { stroke: #b9c0cb; }
+.ck.b .ln { stroke: #4d5869; }
+.ck .crown { fill: #e0a03a; stroke: none; }
+.sq.must { box-shadow: inset 0 0 0 3px var(--accent); }
+.online { display: grid; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 6px; }
+.online .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.online input {
+  font: inherit; font-family: var(--f-mono); text-transform: uppercase; letter-spacing: .12em; width: 9em;
+  padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg);
+}
+.online input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.online .code { font-family: var(--f-display); font-size: 1.7rem; letter-spacing: .16em; }
+.online .muted { color: var(--muted); font-size: .85rem; }
+.online .link { font-family: var(--f-mono); font-size: .75rem; word-break: break-all; color: var(--muted); user-select: all; }
+.online .warn { color: var(--danger); font-size: .88rem; }
+.online .ok { font-weight: 600; }
+.rules { margin: 0; font-size: .88rem; color: var(--muted); max-width: 65ch; }
+.bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .sq.drop .pc { animation: none; } }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Гамбит<span>.</span></h1>
+    <nav class="games" aria-label="Игра / Game">
+      <button class="b" data-game="chess" data-t="gChess">Шахматы</button>
+      <button class="b" data-game="checkers" data-t="gCheckers">Шашки</button>
+    </nav>
+    <div class="tag" data-t="tag">Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки</div>
+    <div class="lang" role="group" aria-label="Язык / Language">
+      <button class="b" id="langRu" data-lang="ru">RU</button>
+      <button class="b" id="langEn" data-lang="en">EN</button>
+    </div>
+  </header>
+
+  <div class="main" id="chessApp">
+    <div class="board-wrap">
+      <div class="review" id="review" hidden>
+        <div class="rev-text" id="revText"></div>
+        <div class="btns">
+          <button class="b" id="revPrev" data-ta="prev" aria-label="Предыдущий ход">◀</button>
+          <button class="b" id="revNext" data-ta="next" aria-label="Следующий ход">▶</button>
+          <button class="b primary" id="revExit" data-t="exit">К текущей позиции</button>
+        </div>
+      </div>
+      <div class="frame"><div class="board" id="board" role="grid" data-ta="board" aria-label="Шахматная доска"></div></div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <div class="status" id="status" aria-live="polite"></div>
+        <div class="caps">
+          <div id="capTop"></div>
+          <div id="capBot"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="field" for="mode"><span data-t="mode">Режим</span>
+          <select id="mode">
+            <option value="ai" data-t="ai">Против компьютера</option>
+            <option value="pvp" data-t="pvp">Вдвоём за одной доской</option>
+            <option value="online" data-t="online">Онлайн с другом</option>
+          </select>
+        </label>
+        <div class="row2" id="aiOpts">
+          <label class="field" for="side"><span data-t="side">Играю за</span>
+            <select id="side">
+              <option value="w" data-t="white">Белых</option>
+              <option value="b" data-t="black">Чёрных</option>
+            </select>
+          </label>
+          <label class="field" for="level"><span data-t="level">Сложность</span>
+            <select id="level">
+              <option value="easy" data-t="easy">Лёгкая</option>
+              <option value="medium" data-t="medium">Средняя</option>
+              <option value="hard" data-t="hard">Сложная</option>
+            </select>
+          </label>
+        </div>
+        <div class="online" id="onlineBox" hidden></div>
+        <div class="btns">
+          <button class="b primary" id="newBtn" data-t="newg">Новая партия</button>
+          <button class="b" id="undoBtn" data-t="undo">Отменить ход</button>
+          <button class="b" id="flipBtn" data-t="flip">Перевернуть</button>
+          <button class="b" id="resignBtn" data-t="resign">Сдаться</button>
+        </div>
+      </div>
+
+      <div class="card" id="report" hidden>
+        <div class="sheet-h"><h2 data-t="report">Отчёт партии</h2><small id="repProg"></small></div>
+        <div id="repBody"></div>
+      </div>
+
+      <div class="card">
+        <div class="sheet-h"><h2 data-t="sheet">Запись партии</h2><small data-t="legend">Кр Ф Л С К</small></div>
+        <div class="moves" id="moves"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="main" id="checkersApp" hidden>
+    <div class="board-wrap">
+      <div class="frame"><div class="board" id="ckBoard" role="grid" data-ta="ckBoardLbl" aria-label="Доска для шашек"></div></div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <div class="status" id="ckStatus" aria-live="polite"></div>
+        <div class="tag" id="ckLeft"></div>
+      </div>
+
+      <div class="card">
+        <label class="field" for="ckMode"><span data-t="mode">Режим</span>
+          <select id="ckMode">
+            <option value="ai" data-t="ai">Против компьютера</option>
+            <option value="pvp" data-t="pvp">Вдвоём за одной доской</option>
+            <option value="online" data-t="online">Онлайн с другом</option>
+          </select>
+        </label>
+        <div class="row2" id="ckAiOpts">
+          <label class="field" for="ckSide"><span data-t="side">Играю за</span>
+            <select id="ckSide">
+              <option value="w" data-t="white">Белых</option>
+              <option value="b" data-t="black">Чёрных</option>
+            </select>
+          </label>
+          <label class="field" for="ckLevel"><span data-t="level">Сложность</span>
+            <select id="ckLevel">
+              <option value="easy" data-t="easy">Лёгкая</option>
+              <option value="medium" data-t="medium">Средняя</option>
+              <option value="hard" data-t="hard">Сложная</option>
+            </select>
+          </label>
+        </div>
+        <div class="online" id="ckOnlineBox" hidden></div>
+        <div class="btns">
+          <button class="b primary" id="ckNew" data-t="newg">Новая партия</button>
+          <button class="b" id="ckUndo" data-t="undo">Отменить ход</button>
+          <button class="b" id="ckFlip" data-t="flip">Перевернуть</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sheet-h"><h2 data-t="sheet">Запись партии</h2><small data-t="ckLegend">c3-d4 ход, c3:e5 взятие</small></div>
+        <div class="moves" id="ckMoves"></div>
+      </div>
+
+      <div class="card">
+        <div class="sheet-h"><h2 data-t="ckRulesH">Правила</h2></div>
+        <p class="rules" data-t="ckRules"></p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+// ---------- Online play: browser to browser through PeerJS ----------
+window.gambitNet = (() => {
+  'use strict';
+  const t = (k, v) => window.gambitI18n.t(k, v);
+  // Inside a claude.ai artifact WebRTC is blocked, so online play exists only on the published site
+  const available = typeof window.Peer === 'function' && !window.claude;
+  const PREFIX = 'gambit-v1-';
+  const hooks = {};
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function makeCode() {
+    const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 5; i++) s += a[Math.floor(Math.random() * a.length)];
+    return s;
+  }
+
+  // One online session per game. cb.start(color) begins a game, cb.message(msg) gets the opponent's moves.
+  function create(game, box, cb) {
+    let peer = null, conn = null, state = 'idle', code = '', myColor = null, err = '', copied = false;
+
+    function close() {
+      try { if (conn) conn.close(); } catch (e) {}
+      try { if (peer) peer.destroy(); } catch (e) {}
+      peer = null; conn = null;
+    }
+    function fail(e) {
+      err = e && e.type === 'peer-unavailable' ? t('onNoGame') : (e && (e.type || e.message)) || String(e);
+      state = 'error'; close(); draw(); cb.change();
+    }
+    function wire(c) {
+      conn = c;
+      c.on('data', msg => {
+        if (!msg || msg.game !== game) return;
+        if (msg.t === 'hello') { myColor = msg.youAre === 'b' ? 'b' : 'w'; state = 'connected'; draw(); cb.start(myColor); }
+        else cb.message(msg);
+      });
+      c.on('close', () => { if (state === 'connected') { state = 'lost'; draw(); cb.change(); } });
+      c.on('error', fail);
+    }
+    function host(side) {
+      close(); code = makeCode(); state = 'opening'; copied = false; draw();
+      peer = new window.Peer(PREFIX + game + '-' + code);
+      peer.on('open', () => { state = 'waiting'; draw(); cb.change(); });
+      peer.on('connection', c => {
+        if (conn && conn.open) { c.on('open', () => c.close()); return; } // the room already has two players
+        wire(c);
+        c.on('open', () => {
+          myColor = side; state = 'connected';
+          c.send({ game, t: 'hello', youAre: side === 'w' ? 'b' : 'w' });
+          draw(); cb.start(myColor);
+        });
+      });
+      peer.on('error', fail);
+    }
+    function join(raw) {
+      const c1 = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!c1) return;
+      close(); code = c1; state = 'connecting'; draw();
+      peer = new window.Peer();
+      peer.on('open', () => wire(peer.connect(PREFIX + game + '-' + code, { reliable: true })));
+      peer.on('error', fail);
+    }
+    function leave() { close(); state = 'idle'; myColor = null; draw(); cb.change(); }
+    function send(msg) { if (conn && conn.open) conn.send({ ...msg, game }); }
+
+    function draw() {
+      const link = location.origin + location.pathname + '?game=' + game + '&join=' + code;
+      const joinForm = `<div class="muted">${t('onOr')}</div>
+        <form class="row" data-act="join"><input id="${game}-code" maxlength="8" autocomplete="off" placeholder="${t('onCodePh')}" aria-label="${t('onCodePh')}"><button class="b">${t('onJoin')}</button></form>`;
+      let h = '';
+      if (state === 'idle' || state === 'error' || state === 'lost') {
+        if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
+        if (state === 'lost') h += `<div class="warn">${t('onLost')}</div>`;
+        h += `<div class="row"><button class="b primary" data-act="host">${t('onCreate')}</button></div>` + joinForm;
+      } else if (state === 'opening' || state === 'connecting') {
+        h += `<div class="muted">${state === 'opening' ? t('onOpening') : esc(t('onConnecting', { c: code }))}</div>
+          <div class="row"><button class="b" data-act="leave">${t('cancel')}</button></div>`;
+      } else if (state === 'waiting') {
+        h += `<div class="muted">${t('onCode')}</div><div class="code">${esc(code)}</div>
+          <div class="link">${esc(link)}</div>
+          <div class="row"><button class="b primary" data-act="copy" data-link="${esc(link)}">${copied ? t('onCopied') : t('onCopy')}</button>
+          <button class="b" data-act="leave">${t('cancel')}</button></div>
+          <div class="muted">${t('onWaiting')}</div>`;
+      } else if (state === 'connected') {
+        h += `<div class="ok">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
+          <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
+      }
+      box.innerHTML = h;
+    }
+
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]');
+      if (!b || b.tagName === 'FORM') return;
+      const act = b.dataset.act;
+      if (act === 'host') host(cb.side());
+      else if (act === 'leave') leave();
+      else if (act === 'copy') {
+        const done = () => { copied = true; draw(); };
+        try { navigator.clipboard.writeText(b.dataset.link).then(done, () => {}); } catch (e2) {}
+      }
+    });
+    box.addEventListener('submit', e => {
+      e.preventDefault();
+      join(box.querySelector('input').value);
+    });
+    document.addEventListener('gambit-lang', draw);
+    draw();
+
+    const session = {
+      join, leave, send, draw,
+      color: () => (state === 'connected' ? myColor : null),
+      active: () => state === 'connected',
+      waiting: () => state === 'waiting'
+    };
+    hooks[game] = { session, enter: cb.enter };
+    return session;
+  }
+
+  // Opening a shared link (?game=chess&join=CODE) joins that game straight away
+  function joinFromLink(game, code) {
+    const h = hooks[game];
+    if (!h || !available) return;
+    h.enter();
+    h.session.join(code);
+  }
+
+  return { available, create, joinFromLink };
+})();
+</script>
+
+<script>
+(() => {
+'use strict';
+// ---------- Engine ----------
+// Piece drawings, 45×45 units each, sharing one pedestal
+const BASE = '<path d="M10 39.5h25V36a2 2 0 0 0-2-2H12a2 2 0 0 0-2 2z"/>';
+const SHAPE = {
+  P: '<path d="M22.5 17C18 17 17 19.5 18.5 21 16 25 15 30 13.5 34h18C30 30 29 25 26.5 21 28 19.5 27 17 22.5 17z"/><circle cx="22.5" cy="12" r="5"/>',
+  R: '<path d="M14 34l1.5-17h14L31 34z"/><path d="M12.5 17V9h4v3H20V9h5v3h3.5V9h4v8z"/><path class="ln" d="M16 21h13M15.6 30h13.8"/>',
+  B: '<path d="M15 34c1-4 3-7 4-9h7c1 2 3 5 4 9z"/><rect x="17.5" y="22.5" width="10" height="3" rx="1"/><path d="M22.5 8C17 11.5 15.5 16.5 17.5 22.5h10C29.5 16.5 28 11.5 22.5 8z"/><circle cx="22.5" cy="6.2" r="2.2"/><path class="ln" d="M24.5 12.5L21 17.5"/>',
+  N: '<path d="M13 34c0-7 3-11 6-14l-4.5 1.5c-2.5 1-4.5-1-3.5-3L18.5 11l.5-4 3 2.5c7-.5 12.5 5.5 11 16.5l-1 8z"/><circle class="eye" cx="20" cy="13.5" r="1.3"/><path class="ln" d="M28 13c2.5 4 3 9 1.5 17"/>',
+  Q: '<path d="M13 34l-2.5-20 5 11 1-14 4 13 2-14.5 2 14.5 4-13 1 14 5-11L32 34z"/><circle cx="10.5" cy="12.5" r="2.2"/><circle cx="16.5" cy="9.5" r="2.2"/><circle cx="22.5" cy="8" r="2.2"/><circle cx="28.5" cy="9.5" r="2.2"/><circle cx="34.5" cy="12.5" r="2.2"/><path class="ln" d="M14 30.5h17"/>',
+  K: '<path d="M13 34c-1-6-4-10-2-14 2-3.5 7-3 11.5 2 4.5-5 9.5-5.5 11.5-2 2 4-1 8-2 14z"/><path d="M22.5 22c-1.5-3-2.5-6 0-8.5 2.5 2.5 1.5 5.5 0 8.5z"/><path d="M22.5 5v8M19 8.5h7" style="stroke-width:2.2"/><path class="ln" d="M14 30.5h17"/>'
+};
+const RU = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К' };
+
+// ---------- Language ----------
+const I18N = {
+  ru: {
+    tag: 'Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки',
+    prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
+    mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
+    gChess: 'Шахматы', gCheckers: 'Шашки',
+    online: 'Онлайн с другом', onCreate: 'Создать игру', onJoin: 'Войти', onCodePh: 'Код игры', onOr: 'или войдите по коду друга',
+    onOpening: 'Подключение…', onConnecting: 'Ищем игру {c}…', onCode: 'Код игры', onCopy: 'Скопировать ссылку', onCopied: 'Ссылка скопирована',
+    onWaiting: 'Отправьте другу код или ссылку и ждите: игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
+    onLost: 'Соперник отключился.', onError: 'Не удалось подключиться: {e}', onNoGame: 'игры с таким кодом нет',
+    onLeave: 'Выйти из игры', onIdle: 'Создайте игру или войдите по коду', onWait: 'Ждём соперника…', onYour: ' · ваш ход', onTheirs: ' · ход соперника',
+    ckTag: 'Русские шашки: бить обязательно, простые бьют и назад, дамка ходит на любое число полей',
+    ckBoardLbl: 'Доска для шашек', ckLegend: 'c3-d4 ход, c3:e5 взятие', ckLeft: 'На доске: белых {w}, чёрных {b}',
+    ckMust: 'Бить обязательно', ckWinW: 'Победа белых: у чёрных нет ходов', ckWinB: 'Победа чёрных: у белых нет ходов',
+    ckDraw: 'Ничья: 15 ходов дамками без взятий', ckRulesH: 'Правила',
+    ckRules: 'Шашки ходят по диагонали на одно поле вперёд. Бить обязательно, вперёд и назад, и бить нужно до конца, пока есть кого. Шашка, дошедшая до последнего ряда, становится дамкой и ходит по диагонали на любое число полей. Проигрывает тот, кому нечем ходить.',
+    level: 'Сложность', easy: 'Лёгкая', medium: 'Средняя', hard: 'Сложная',
+    newg: 'Новая партия', undo: 'Отменить ход', flip: 'Перевернуть', resign: 'Сдаться',
+    report: 'Отчёт партии', sheet: 'Запись партии', legend: 'Кр Ф Л С К',
+    analysis: 'Анализ {k} из {n}', colW: 'Белые', colB: 'Чёрные', acc: 'Точность',
+    key: 'Ключевые моменты', keyHint: '· нажмите, чтобы показать на доске', sacOk: 'жертва, и она работает',
+    better: 'лучше было', clean: 'Ни зевков, ни ошибок, ни жертв.', greenBox: 'зелёная рамка',
+    promo: 'Превратить пешку в', cancel: 'Отмена', thinking: 'Компьютер думает…', check: 'Шах! ',
+    turnW: 'Ход белых', turnB: 'Ход чёрных', empty: 'Партия ещё не началась. Сделайте первый ход.',
+    resW: 'Белые сдались. Победа чёрных', resB: 'Чёрные сдались. Победа белых',
+    mateW: 'Мат. Победа белых', mateB: 'Мат. Победа чёрных', stale: 'Пат. Ничья',
+    fifty: 'Ничья по правилу 50 ходов', rep3: 'Ничья: трёхкратное повторение', insuf: 'Ничья: недостаточно материала',
+    cls: { brill: ['Бриллиантовые', 'бриллиантовый ход'], best: ['Лучшие', 'лучший ход'], good: ['Хорошие', 'хороший ход'],
+      inacc: ['Неточности', 'неточность'], mist: ['Ошибки', 'ошибка'], blun: ['Зевки', 'зевок'] }
+  },
+  en: {
+    tag: 'Full-rules chess: castling, en passant, pawn promotion',
+    prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
+    mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
+    gChess: 'Chess', gCheckers: 'Checkers',
+    online: 'Online with a friend', onCreate: 'Create game', onJoin: 'Join', onCodePh: 'Game code', onOr: "or join with your friend's code",
+    onOpening: 'Connecting…', onConnecting: 'Looking for game {c}…', onCode: 'Game code', onCopy: 'Copy link', onCopied: 'Link copied',
+    onWaiting: 'Send your friend the code or link and wait: the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
+    onLost: 'Your opponent disconnected.', onError: 'Could not connect: {e}', onNoGame: 'no game with that code',
+    onLeave: 'Leave game', onIdle: 'Create a game or join with a code', onWait: 'Waiting for an opponent…', onYour: ' · your move', onTheirs: " · opponent's move",
+    ckTag: 'Russian draughts: captures are compulsory, men capture backwards, kings move any distance',
+    ckBoardLbl: 'Checkers board', ckLegend: 'c3-d4 move, c3:e5 capture', ckLeft: 'On the board: White {w}, Black {b}',
+    ckMust: 'You must capture', ckWinW: 'White wins: Black has no moves', ckWinB: 'Black wins: White has no moves',
+    ckDraw: 'Draw: 15 king moves without a capture', ckRulesH: 'Rules',
+    ckRules: 'Men move one square diagonally forward. Capturing is compulsory, forwards and backwards, and you keep capturing while you can. A man that reaches the far row becomes a king and moves any number of squares diagonally. The player with no legal move loses.',
+    level: 'Difficulty', easy: 'Easy', medium: 'Medium', hard: 'Hard',
+    newg: 'New game', undo: 'Undo move', flip: 'Flip board', resign: 'Resign',
+    report: 'Game report', sheet: 'Moves', legend: 'K Q R B N',
+    analysis: 'Analysing {k} of {n}', colW: 'White', colB: 'Black', acc: 'Accuracy',
+    key: 'Key moments', keyHint: '· click to show on the board', sacOk: 'a sacrifice that works',
+    better: 'better was', clean: 'No blunders, mistakes or sacrifices.', greenBox: 'green frame',
+    promo: 'Promote pawn to', cancel: 'Cancel', thinking: 'Computer is thinking…', check: 'Check! ',
+    turnW: 'White to move', turnB: 'Black to move', empty: 'No moves yet. Make the first move.',
+    resW: 'White resigned. Black wins', resB: 'Black resigned. White wins',
+    mateW: 'Checkmate. White wins', mateB: 'Checkmate. Black wins', stale: 'Stalemate. Draw',
+    fifty: 'Draw by the 50-move rule', rep3: 'Draw by threefold repetition', insuf: 'Draw: insufficient material',
+    cls: { brill: ['Brilliant', 'brilliant move'], best: ['Best', 'best move'], good: ['Good', 'good move'],
+      inacc: ['Inaccuracies', 'inaccuracy'], mist: ['Mistakes', 'mistake'], blun: ['Blunders', 'blunder'] }
+  }
+};
+let lang = 'ru';
+try { if (localStorage.getItem('gambit-lang') === 'en') lang = 'en'; } catch (e) {}
+const t = (k, vars) => {
+  let v = I18N[lang][k];
+  if (vars) for (const x in vars) v = v.replace('{' + x + '}', vars[x]);
+  return v;
+};
+// Moves are recorded in Russian notation; English shows K Q R B N, "x" for captures, O-O for castling
+const fmt = san => lang === 'ru' ? san
+  : san.replace(/Кр/g, 'K').replace(/Ф/g, 'Q').replace(/Л/g, 'R').replace(/С/g, 'B').replace(/К/g, 'N').replace(/:/g, 'x').replace(/0/g, 'O');
+window.gambitI18n = { t, apply: () => applyLang() };
+const FILES = 'abcdefgh';
+const VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 0 };
+const PST = {
+  P: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10, 5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5, 5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+  N: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+  B: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10, -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10, -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+  R: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+  Q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10, -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10, -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+  K: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10, 20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20],
+  KE: [-50,-40,-30,-20,-20,-30,-40,-50, -30,-20,-10,0,0,-10,-20,-30, -30,-10,20,30,30,20,-10,-30, -30,-10,30,40,40,30,-10,-30, -30,-10,30,40,40,30,-10,-30, -30,-10,20,30,30,20,-10,-30, -30,-30,0,0,0,0,-30,-30, -50,-30,-30,-30,-30,-30,-30,-50]
+};
+const KN = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+const DG = [[-1,-1],[-1,1],[1,-1],[1,1]];
+const OR = [[-1,0],[1,0],[0,-1],[0,1]];
+const AL = DG.concat(OR);
+const CASTLE_ROOK = { 62: [63, 61], 58: [56, 59], 6: [7, 5], 2: [0, 3] };
+const opp = c => (c === 'w' ? 'b' : 'w');
+const sqName = i => FILES[i & 7] + (8 - (i >> 3));
+
+function newGame() {
+  const b = new Array(64).fill(null);
+  const back = 'RNBQKBNR';
+  for (let c = 0; c < 8; c++) {
+    b[c] = 'b' + back[c]; b[8 + c] = 'bP';
+    b[48 + c] = 'wP'; b[56 + c] = 'w' + back[c];
+  }
+  return { b, turn: 'w', cr: { wK: true, wQ: true, bK: true, bQ: true }, ep: -1, hm: 0, stack: [] };
+}
+
+function attacked(b, sq, by) {
+  const r = sq >> 3, c = sq & 7;
+  const pr = by === 'w' ? r + 1 : r - 1;
+  if (pr >= 0 && pr < 8) {
+    if (c > 0 && b[pr * 8 + c - 1] === by + 'P') return true;
+    if (c < 7 && b[pr * 8 + c + 1] === by + 'P') return true;
+  }
+  for (const [dr, dc] of KN) {
+    const r1 = r + dr, c1 = c + dc;
+    if (r1 >= 0 && r1 < 8 && c1 >= 0 && c1 < 8 && b[r1 * 8 + c1] === by + 'N') return true;
+  }
+  for (const [dr, dc] of AL) {
+    const r1 = r + dr, c1 = c + dc;
+    if (r1 >= 0 && r1 < 8 && c1 >= 0 && c1 < 8 && b[r1 * 8 + c1] === by + 'K') return true;
+  }
+  for (const [dr, dc] of DG) {
+    let r1 = r + dr, c1 = c + dc;
+    while (r1 >= 0 && r1 < 8 && c1 >= 0 && c1 < 8) {
+      const p = b[r1 * 8 + c1];
+      if (p) { if (p[0] === by && (p[1] === 'B' || p[1] === 'Q')) return true; break; }
+      r1 += dr; c1 += dc;
+    }
+  }
+  for (const [dr, dc] of OR) {
+    let r1 = r + dr, c1 = c + dc;
+    while (r1 >= 0 && r1 < 8 && c1 >= 0 && c1 < 8) {
+      const p = b[r1 * 8 + c1];
+      if (p) { if (p[0] === by && (p[1] === 'R' || p[1] === 'Q')) return true; break; }
+      r1 += dr; c1 += dc;
+    }
+  }
+  return false;
+}
+
+function kingSq(b, col) { return b.indexOf(col + 'K'); }
+function inCheck(s, col) { return attacked(s.b, kingSq(s.b, col), opp(col)); }
+
+function pseudo(s, capturesOnly) {
+  const ms = [], b = s.b, col = s.turn, en = opp(col);
+  const add = (from, to, p, cap, promoRank) => {
+    if (promoRank) for (const t of 'QRBN') ms.push({ from, to, p, cap, promo: t });
+    else ms.push({ from, to, p, cap });
+  };
+  for (let sq = 0; sq < 64; sq++) {
+    const p = b[sq];
+    if (!p || p[0] !== col) continue;
+    const t = p[1], r = sq >> 3, c = sq & 7;
+    if (t === 'P') {
+      const d = col === 'w' ? -1 : 1, r1 = r + d, last = col === 'w' ? 0 : 7;
+      if (r1 < 0 || r1 > 7) continue;
+      const f = r1 * 8 + c;
+      if (!b[f] && (!capturesOnly || r1 === last)) {
+        add(sq, f, p, undefined, r1 === last);
+        if (!capturesOnly && r === (col === 'w' ? 6 : 1) && !b[f + d * 8]) ms.push({ from: sq, to: f + d * 8, p, flag: 'double' });
+      }
+      for (const dc of [-1, 1]) {
+        const c1 = c + dc; if (c1 < 0 || c1 > 7) continue;
+        const t2 = r1 * 8 + c1, q = b[t2];
+        if (q && q[0] === en) add(sq, t2, p, q, r1 === last);
+        else if (t2 === s.ep) ms.push({ from: sq, to: t2, p, cap: en + 'P', flag: 'ep' });
+      }
+    } else if (t === 'N' || t === 'K') {
+      for (const [dr, dc] of t === 'N' ? KN : AL) {
+        const r1 = r + dr, c1 = c + dc;
+        if (r1 < 0 || r1 > 7 || c1 < 0 || c1 > 7) continue;
+        const t2 = r1 * 8 + c1, q = b[t2];
+        if (q ? q[0] === en : !capturesOnly) ms.push({ from: sq, to: t2, p, cap: q || undefined });
+      }
+      if (t === 'K' && !capturesOnly) {
+        const home = col === 'w' ? 60 : 4;
+        if (sq === home && !attacked(b, home, en)) {
+          if (s.cr[col + 'K'] && !b[home + 1] && !b[home + 2] && b[home + 3] === col + 'R' &&
+              !attacked(b, home + 1, en) && !attacked(b, home + 2, en))
+            ms.push({ from: sq, to: home + 2, p, flag: 'castle' });
+          if (s.cr[col + 'Q'] && !b[home - 1] && !b[home - 2] && !b[home - 3] && b[home - 4] === col + 'R' &&
+              !attacked(b, home - 1, en) && !attacked(b, home - 2, en))
+            ms.push({ from: sq, to: home - 2, p, flag: 'castle' });
+        }
+      }
+    } else {
+      const dirs = t === 'B' ? DG : t === 'R' ? OR : AL;
+      for (const [dr, dc] of dirs) {
+        let r1 = r + dr, c1 = c + dc;
+        while (r1 >= 0 && r1 < 8 && c1 >= 0 && c1 < 8) {
+          const t2 = r1 * 8 + c1, q = b[t2];
+          if (q) { if (q[0] === en) ms.push({ from: sq, to: t2, p, cap: q }); break; }
+          if (!capturesOnly) ms.push({ from: sq, to: t2, p });
+          r1 += dr; c1 += dc;
+        }
+      }
+    }
+  }
+  return ms;
+}
+
+function make(s, m) {
+  const b = s.b, col = m.p[0];
+  s.stack.push({ m, cr: { ...s.cr }, ep: s.ep, hm: s.hm });
+  b[m.from] = null;
+  b[m.to] = m.promo ? col + m.promo : m.p;
+  if (m.flag === 'ep') b[m.to + (col === 'w' ? 8 : -8)] = null;
+  if (m.flag === 'castle') { const [rf, rt] = CASTLE_ROOK[m.to]; b[rt] = b[rf]; b[rf] = null; }
+  s.ep = m.flag === 'double' ? (m.from + m.to) / 2 : -1;
+  if (m.p[1] === 'K') { s.cr[col + 'K'] = false; s.cr[col + 'Q'] = false; }
+  for (const x of [m.from, m.to]) {
+    if (x === 63) s.cr.wK = false; else if (x === 56) s.cr.wQ = false;
+    else if (x === 7) s.cr.bK = false; else if (x === 0) s.cr.bQ = false;
+  }
+  s.hm = (m.p[1] === 'P' || m.cap) ? 0 : s.hm + 1;
+  s.turn = opp(col);
+}
+
+function unmake(s) {
+  const u = s.stack.pop(), m = u.m, b = s.b, col = m.p[0];
+  b[m.from] = m.p;
+  if (m.flag === 'ep') { b[m.to] = null; b[m.to + (col === 'w' ? 8 : -8)] = m.cap; }
+  else b[m.to] = m.cap || null;
+  if (m.flag === 'castle') { const [rf, rt] = CASTLE_ROOK[m.to]; b[rf] = b[rt]; b[rt] = null; }
+  s.cr = u.cr; s.ep = u.ep; s.hm = u.hm; s.turn = col;
+}
+
+function legal(s) {
+  const col = s.turn;
+  return pseudo(s).filter(m => { make(s, m); const ok = !inCheck(s, col); unmake(s); return ok; });
+}
+
+function san(s, m, all) {
+  let out;
+  if (m.flag === 'castle') out = (m.to & 7) === 6 ? '0-0' : '0-0-0';
+  else if (m.p[1] === 'P') {
+    out = (m.cap ? FILES[m.from & 7] + ':' : '') + sqName(m.to) + (m.promo ? RU[m.promo] : '');
+  } else {
+    out = RU[m.p[1]];
+    const others = all.filter(o => o.p === m.p && o.to === m.to && o.from !== m.from);
+    if (others.length) {
+      const sameFile = others.some(o => (o.from & 7) === (m.from & 7));
+      const sameRank = others.some(o => (o.from >> 3) === (m.from >> 3));
+      out += !sameFile ? FILES[m.from & 7] : !sameRank ? String(8 - (m.from >> 3)) : sqName(m.from);
+    }
+    out += (m.cap ? ':' : '') + sqName(m.to);
+  }
+  make(s, m);
+  if (inCheck(s, s.turn)) out += legal(s).length ? '+' : '#';
+  unmake(s);
+  return out;
+}
+
+// ---------- AI ----------
+function evaluate(s) {
+  const b = s.b;
+  let score = 0, nonPawn = 0;
+  for (let i = 0; i < 64; i++) { const p = b[i]; if (p && p[1] !== 'P' && p[1] !== 'K') nonPawn += VAL[p[1]]; }
+  const endgame = nonPawn <= 1600;
+  for (let i = 0; i < 64; i++) {
+    const p = b[i]; if (!p) continue;
+    const t = p[1], idx = p[0] === 'w' ? i : (7 - (i >> 3)) * 8 + (i & 7);
+    const v = VAL[t] + (t === 'K' && endgame ? PST.KE : PST[t])[idx];
+    score += p[0] === 'w' ? v : -v;
+  }
+  return s.turn === 'w' ? score : -score;
+}
+
+function order(ms) {
+  for (const m of ms) m.o = (m.cap ? 10 * VAL[m.cap[1]] - VAL[m.p[1]] + 1000 : 0) + (m.promo === 'Q' ? 900 : 0);
+  ms.sort((a, b) => b.o - a.o);
+}
+
+let nodes = 0;
+function quiesce(s, alpha, beta, qd) {
+  nodes++;
+  const stand = evaluate(s);
+  if (stand >= beta) return beta;
+  if (stand > alpha) alpha = stand;
+  if (qd >= 4) return alpha;
+  const ms = pseudo(s, true); order(ms);
+  const col = s.turn;
+  for (const m of ms) {
+    make(s, m);
+    if (inCheck(s, col)) { unmake(s); continue; }
+    const v = -quiesce(s, -beta, -alpha, qd + 1);
+    unmake(s);
+    if (v >= beta) return beta;
+    if (v > alpha) alpha = v;
+  }
+  return alpha;
+}
+
+function negamax(s, depth, alpha, beta, ply) {
+  nodes++;
+  if (s.hm >= 100) return 0;
+  if (depth === 0) return quiesce(s, alpha, beta, 0);
+  const ms = pseudo(s); order(ms);
+  const col = s.turn;
+  let any = false;
+  for (const m of ms) {
+    make(s, m);
+    if (inCheck(s, col)) { unmake(s); continue; }
+    any = true;
+    const v = -negamax(s, depth - 1, -beta, -alpha, ply + 1);
+    unmake(s);
+    if (v >= beta) return beta;
+    if (v > alpha) alpha = v;
+  }
+  if (!any) return inCheck(s, col) ? -100000 + ply : 0;
+  return alpha;
+}
+
+// Easy: a random move, grabbing a piece about half the time
+function dumbMove(s) {
+  const ms = legal(s), caps = ms.filter(m => m.cap);
+  const pool = caps.length && Math.random() < 0.5 ? caps : ms;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Medium and hard: a real search; `noise` (in centipawns) blurs its judgement
+function searchMove(s, depth, noise) {
+  const ms = legal(s);
+  order(ms);
+  let best = ms[0], bestV = -Infinity;
+  for (const m of ms) {
+    make(s, m);
+    const v = -negamax(s, depth - 1, -Infinity, Infinity, 1) + (Math.random() - 0.5) * 2 * noise;
+    unmake(s);
+    if (v > bestV) { bestV = v; best = m; }
+  }
+  return best;
+}
+
+function botMove(s, level) {
+  if (level === 'easy') return dumbMove(s);
+  if (level === 'medium') return Math.random() < 0.15 ? dumbMove(s) : searchMove(s, 2, 60);
+  const endgame = s.b.filter(Boolean).length <= 10;
+  return searchMove(s, endgame ? 4 : 3, 8);
+}
+
+// ---------- Post-game report ----------
+const CLS = {
+  brill: { s: '!!' }, best: { s: '★' }, good: { s: '' }, inacc: { s: '?!' }, mist: { s: '?' }, blun: { s: '??' }
+};
+const clampV = v => Math.max(-2000, Math.min(2000, v));
+const sameMove = (a, b) => a.from === b.from && a.to === b.to && (a.promo || null) === (b.promo || null);
+
+// After the move is made: a piece was left en prise for less than it is worth
+function isSacrifice(s, m) {
+  const t = m.p[1];
+  if (t === 'P' || t === 'K') return false;
+  const col = m.p[0], give = VAL[t] - (m.cap ? VAL[m.cap[1]] : 0);
+  if (give < 200 || !attacked(s.b, m.to, opp(col))) return false;
+  return !attacked(s.b, m.to, col) || VAL[t] >= 500;
+}
+
+function classify(loss, sac, bestV) {
+  if (sac && loss <= 20 && bestV < 600) return 'brill';
+  if (loss <= 10) return 'best';
+  if (loss <= 60) return 'good';
+  if (loss <= 150) return 'inacc';
+  if (loss <= 300) return 'mist';
+  return 'blun';
+}
+
+let report = null, anToken = 0;
+function analyze() {
+  const token = ++anToken, list = history.map(h => h.m), s = newGame();
+  report = { plies: [], done: false };
+  let i = 0;
+  const step = () => {
+    if (token !== anToken) return;
+    if (i >= list.length) { report.done = true; render(); return; }
+    const col = s.turn, ms = legal(s);
+    let best = ms[0], bestV = -Infinity, playedV = null, pm = ms[0];
+    for (const m of ms) {
+      make(s, m);
+      const v = clampV(-negamax(s, 2, -Infinity, Infinity, 1));
+      unmake(s);
+      if (v > bestV) { bestV = v; best = m; }
+      if (sameMove(m, list[i])) { playedV = v; pm = m; }
+    }
+    const loss = sameMove(best, pm) ? 0 : Math.max(0, bestV - playedV);
+    const bestSan = san(s, best, ms);
+    make(s, pm);
+    report.plies.push({ col, loss, bestSan, best: { from: best.from, to: best.to }, isBest: sameMove(best, pm), cls: classify(loss, isSacrifice(s, pm), bestV) });
+    i++;
+    render();
+    setTimeout(step, 0);
+  };
+  render();
+  setTimeout(step, 30);
+}
+
+function renderReport() {
+  const el = $('report');
+  if (!report) { el.hidden = true; return; }
+  el.hidden = false;
+  const n = history.length, k = report.plies.length;
+  $('repProg').textContent = report.done ? '' : t('analysis', { k, n });
+  const cnt = { w: {}, b: {} }, sum = { w: 0, b: 0 }, num = { w: 0, b: 0 };
+  for (const p of report.plies) {
+    cnt[p.col][p.cls] = (cnt[p.col][p.cls] || 0) + 1;
+    sum[p.col] += Math.min(p.loss, 1000); num[p.col]++;
+  }
+  const acc = c => (num[c] ? Math.round(100 * Math.exp(-sum[c] / num[c] / 200)) + '%' : '—');
+  let h = report.done ? '' : `<div class="bar"><i style="width:${n ? (100 * k / n) : 0}%"></i></div>`;
+  h += `<table class="rep"><thead><tr><th></th><th>${t('colW')}</th><th>${t('colB')}</th></tr></thead><tbody>`;
+  h += `<tr class="acc"><td>${t('acc')}</td><td>${acc('w')}</td><td>${acc('b')}</td></tr>`;
+  for (const [key, c] of Object.entries(CLS)) {
+    h += `<tr><td><span class="bdg ${key}">${c.s || '✓'}</span>${t('cls')[key][0]}</td><td>${cnt.w[key] || 0}</td><td>${cnt.b[key] || 0}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  const moments = report.plies.map((p, i) => ({ ...p, i })).filter(p => p.cls === 'brill' || p.cls === 'blun' || p.cls === 'mist');
+  if (moments.length) {
+    h += `<div class="key"><h3>${t('key')} <small>${t('keyHint')}</small></h3>`;
+    for (const p of moments) {
+      const num = Math.floor(p.i / 2) + 1 + (p.i % 2 ? '…' : '.');
+      const hint = p.cls === 'brill' ? t('sacOk') : `${t('better')} ${fmt(p.bestSan)} (−${(p.loss / 100).toFixed(1)})`;
+      h += `<button class="km${view === p.i ? ' on' : ''}" data-ply="${p.i}"><span class="bdg ${p.cls}">${CLS[p.cls].s}</span><span><b>${num} ${fmt(history[p.i].san)}</b> ${t('cls')[p.cls][1]}, <span class="hint">${hint}</span></span></button>`;
+    }
+    h += '</div>';
+  } else if (report.done) {
+    h += `<div class="key"><h3>${t('key')}</h3><span class="hint">${t('clean')}</span></div>`;
+  }
+  $('repBody').innerHTML = h;
+}
+
+// ---------- Game state ----------
+let G, history, keys, sel = null, targets = [], pendingPromo = null, flipped = false, thinking = false, dropSq = -1, resigned = null;
+let view = null; // index of the move shown on the board while reviewing; null shows the live game
+const posKey = s => s.b.map(p => p || '.').join('') + s.turn + (s.cr.wK ? 1 : 0) + (s.cr.wQ ? 1 : 0) + (s.cr.bK ? 1 : 0) + (s.cr.bQ ? 1 : 0) + s.ep;
+const repeatCount = k => keys.filter(x => x === k).length;
+const $ = id => document.getElementById(id);
+const modeSel = $('mode'), sideSel = $('side'), levelSel = $('level');
+
+function insufficient(b) {
+  const pcs = b.filter(p => p && p[1] !== 'K');
+  if (pcs.length === 0) return true;
+  return pcs.length === 1 && (pcs[0][1] === 'N' || pcs[0][1] === 'B');
+}
+
+function gameResult() {
+  if (resigned) return { key: resigned === 'w' ? 'resW' : 'resB', over: true };
+  const ms = legal(G);
+  if (!ms.length) {
+    if (inCheck(G, G.turn)) return { key: G.turn === 'w' ? 'mateB' : 'mateW', over: true };
+    return { key: 'stale', over: true };
+  }
+  if (G.hm >= 100) return { key: 'fifty', over: true };
+  if (repeatCount(keys[keys.length - 1]) >= 3) return { key: 'rep3', over: true };
+  if (insufficient(G.b)) return { key: 'insuf', over: true };
+  return { over: false, moves: ms };
+}
+
+const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
+const online = () => modeSel.value === 'online';
+const net = window.gambitNet.create('chess', $('onlineBox'), {
+  side: () => sideSel.value,
+  start: () => reset(false),
+  message: msg => {
+    if (msg.t === 'new') reset(false);
+    else if (msg.t === 'resign' && !gameResult().over) { resigned = opp(net.color()); analyze(); }
+    else if (msg.t === 'move' && G.turn !== net.color() && !gameResult().over) {
+      const m = legal(G).find(x => x.from === msg.from && x.to === msg.to && (x.promo || null) === (msg.promo || null));
+      if (m) play(m, true);
+    }
+  },
+  change: () => render(),
+  enter: () => { modeSel.value = 'online'; reset(false); }
+});
+
+function reset(keepFlip) {
+  G = newGame(); history = []; keys = [posKey(G)]; sel = null; targets = []; pendingPromo = null; dropSq = -1;
+  resigned = null; report = null; anToken++; view = null;
+  if (!keepFlip) flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
+  render(); maybeAI();
+}
+
+function play(m, remote) {
+  const all = legal(G);
+  const notation = san(G, m, all);
+  make(G, m);
+  history.push({ m, san: notation });
+  keys.push(posKey(G));
+  if (online() && !remote) net.send({ t: 'move', from: m.from, to: m.to, promo: m.promo || null });
+  sel = null; targets = []; dropSq = m.to; view = null;
+  if (gameResult().over) { analyze(); return; }
+  render();
+  maybeAI();
+}
+
+function maybeAI() {
+  if (G.turn !== aiColor() || gameResult().over) return;
+  thinking = true; render();
+  setTimeout(() => {
+    const m = botMove(G, levelSel.value);
+    thinking = false;
+    if (m) play(m); else render();
+  }, 450);
+}
+
+function resign() {
+  if (thinking || !history.length || gameResult().over || (online() && !net.active())) return;
+  resigned = online() ? net.color() : aiColor() ? sideSel.value : G.turn;
+  if (online()) net.send({ t: 'resign' });
+  sel = null; targets = []; pendingPromo = null;
+  analyze();
+}
+
+function undo() {
+  if (thinking || !history.length || online()) return;
+  resigned = null; report = null; anToken++; view = null;
+  // Against the computer, step back to the player's own turn
+  do { unmake(G); history.pop(); keys.pop(); } while (history.length && G.turn === aiColor());
+  sel = null; targets = []; pendingPromo = null; dropSq = -1;
+  render(); maybeAI();
+}
+
+function onSquare(i) {
+  if (thinking || pendingPromo) return;
+  if (view !== null) { showPly(null); return; }
+  const res = gameResult();
+  if (res.over || G.turn === aiColor() || (online() && G.turn !== net.color())) return;
+  const p = G.b[i];
+  if (sel !== null) {
+    const choices = targets.filter(m => m.to === i);
+    if (choices.length) {
+      if (choices.length > 1) { pendingPromo = choices; render(); return; }
+      play(choices[0]); return;
+    }
+  }
+  if (p && p[0] === G.turn && sel !== i) {
+    sel = i; targets = res.moves.filter(m => m.from === i);
+  } else { sel = null; targets = []; }
+  render();
+}
+
+// ---------- Rendering ----------
+const boardEl = $('board');
+function pieceHTML(p) { return `<svg class="pc ${p[0]}" viewBox="0 0 45 45" aria-hidden="true">${SHAPE[p[1]]}${BASE}</svg>`; }
+
+function showPly(i) {
+  if (i !== null && (i < 0 || i >= history.length)) return;
+  if (i === history.length - 1 && !gameResult().over) i = null;
+  view = i; sel = null; targets = [];
+  render();
+}
+
+// Position after move `ply`, replayed from the start
+function positionAt(ply) {
+  const s = newGame();
+  for (let i = 0; i <= ply; i++) make(s, history[i].m);
+  return s;
+}
+
+function renderReview() {
+  const el = $('review');
+  if (view === null) { el.hidden = true; return; }
+  el.hidden = false;
+  const p = report && report.plies[view];
+  const num = Math.floor(view / 2) + 1 + (view % 2 ? '…' : '.');
+  let txt = `<b>${num} ${fmt(history[view].san)}</b>`;
+  if (p) {
+    txt += ` <span class="bdg ${p.cls}">${CLS[p.cls].s || '✓'}</span> ${t('cls')[p.cls][1]}`;
+    if (!p.isBest) txt += `<span class="hint">, ${t('better')} <b>${fmt(p.bestSan)}</b> (${t('greenBox')})</span>`;
+  }
+  $('revText').innerHTML = txt;
+  $('revPrev').disabled = view <= 0;
+  $('revNext').disabled = view >= history.length - 1;
+}
+
+function render() {
+  const res = gameResult();
+  const B = view === null ? G : positionAt(view);
+  const lastIdx = view === null ? history.length - 1 : view;
+  const last = lastIdx >= 0 ? history[lastIdx].m : null;
+  const bestHint = view !== null && report && report.plies[view] && !report.plies[view].isBest ? report.plies[view].best : null;
+  const chk = inCheck(B, B.turn) ? kingSq(B.b, B.turn) : -1;
+  let html = '';
+  for (let k = 0; k < 64; k++) {
+    const i = flipped ? 63 - k : k, r = i >> 3, c = i & 7, p = B.b[i];
+    const cls = ['sq'];
+    if ((r + c) % 2) cls.push('d');
+    if (last && (i === last.from || i === last.to)) cls.push('last');
+    if (bestHint && (i === bestHint.from || i === bestHint.to)) cls.push('hint');
+    if (i === sel) cls.push('sel');
+    if (i === chk) cls.push('check');
+    const t = targets.find(m => m.to === i);
+    if (t) cls.push('tgt'), (p || t.flag === 'ep') && cls.push('cap');
+    if (i === dropSq) cls.push('drop');
+    let co = '';
+    if (k % 8 === 0) co += `<span class="co r">${8 - r}</span>`;
+    if (k >= 56) co += `<span class="co f">${FILES[c]}</span>`;
+    html += `<button class="${cls.join(' ')}" data-i="${i}" aria-label="${sqName(i)}${p ? ' ' + p : ''}">${co}${p ? pieceHTML(p) : ''}</button>`;
+  }
+  if (pendingPromo) {
+    const col = pendingPromo[0].p[0];
+    html += `<div class="promo"><div class="promo-box"><p>${t('promo')}</p><div class="promo-row">` +
+      'QRBN'.split('').map(x => `<button data-promo="${x}" aria-label="${fmt(RU[x])}">${pieceHTML(col + x)}</button>`).join('') +
+      `</div><button class="b" data-promo="x">${t('cancel')}</button></div></div>`;
+  }
+  boardEl.innerHTML = html;
+  dropSq = -1;
+
+  const st = $('status');
+  st.className = 'status' + (res.over ? ' over' : chk >= 0 ? ' chk' : '');
+  if (res.over) st.innerHTML = t(res.key);
+  else {
+    let txt = thinking ? t('thinking') : (chk >= 0 ? t('check') : '') + t(G.turn === 'w' ? 'turnW' : 'turnB');
+    if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : txt + t(G.turn === net.color() ? 'onYour' : 'onTheirs');
+    st.innerHTML = `<span class="dot ${G.turn}"></span><span>${txt}</span>`;
+  }
+
+  // captured pieces
+  const capBy = { w: [], b: [] };
+  for (const h of history) if (h.m.cap) capBy[h.m.p[0]].push(h.m.cap);
+  let mat = 0;
+  for (const p of G.b) if (p) mat += (p[0] === 'w' ? 1 : -1) * VAL[p[1]];
+  const sortCaps = a => a.sort((x, y) => VAL[y[1]] - VAL[x[1]]);
+  const capLine = col => {
+    const adv = (col === 'w' ? mat : -mat) / 100;
+    return sortCaps(capBy[col]).map(pieceHTML).join('') + (adv > 0 ? `<span class="adv">+${Math.round(adv)}</span>` : '');
+  };
+  const top = flipped ? 'w' : 'b';
+  $('capTop').innerHTML = capLine(top);
+  $('capBot').innerHTML = capLine(opp(top));
+
+  // move list
+  const mv = $('moves');
+  if (!history.length) mv.innerHTML = `<span class="empty">${t('empty')}</span>`;
+  else {
+    const cell = i => {
+      const p = report && report.plies[i], mk = p && CLS[p.cls].s ? `<span class="mk ${p.cls}">${CLS[p.cls].s}</span>` : '';
+      return `<button class="mv${i === lastIdx ? ' cur' : ''}" data-ply="${i}">${fmt(history[i].san)}${mk}</button>`;
+    };
+    let s = '';
+    for (let i = 0; i < history.length; i += 2) {
+      s += `<span class="n">${i / 2 + 1}.</span>${cell(i)}${history[i + 1] ? cell(i + 1) : '<span></span>'}`;
+    }
+    mv.innerHTML = s;
+    if (view === null) mv.scrollTop = mv.scrollHeight;
+  }
+  renderReview();
+  $('undoBtn').disabled = thinking || !history.length || online();
+  $('resignBtn').disabled = thinking || !history.length || res.over || (online() && !net.active());
+  $('aiOpts').hidden = !(modeSel.value === 'ai' || online());
+  levelSel.closest('label').hidden = online();
+  sideSel.disabled = online() && net.active();
+  $('onlineBox').hidden = !online();
+  renderReport();
+}
+
+boardEl.addEventListener('click', e => {
+  const pb = e.target.closest('[data-promo]');
+  if (pb) {
+    const t = pb.dataset.promo, choices = pendingPromo;
+    pendingPromo = null;
+    if (t === 'x') { render(); return; }
+    play(choices.find(m => m.promo === t)); return;
+  }
+  const sq = e.target.closest('[data-i]');
+  if (sq) onSquare(+sq.dataset.i);
+});
+$('newBtn').addEventListener('click', () => {
+  if (thinking) return;
+  reset(false);
+  if (online()) net.send({ t: 'new' });
+});
+$('undoBtn').addEventListener('click', undo);
+$('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
+$('resignBtn').addEventListener('click', resign);
+function applyLang() {
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+  for (const el of document.querySelectorAll('[data-ta]')) el.setAttribute('aria-label', t(el.dataset.ta));
+  for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+}
+for (const b of document.querySelectorAll('[data-lang]')) {
+  b.addEventListener('click', () => {
+    lang = b.dataset.lang;
+    try { localStorage.setItem('gambit-lang', lang); } catch (e) {}
+    applyLang(); render();
+    document.dispatchEvent(new Event('gambit-lang'));
+  });
+}
+applyLang();
+for (const id of ['moves', 'repBody']) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('[data-ply]');
+    if (b && !thinking) showPly(+b.dataset.ply);
+  });
+}
+$('revPrev').addEventListener('click', () => showPly(view - 1));
+$('revNext').addEventListener('click', () => showPly(view + 1));
+$('revExit').addEventListener('click', () => showPly(null));
+document.addEventListener('keydown', e => {
+  if ($('chessApp').hidden || e.target.closest('select') || !history.length || thinking) return;
+  const cur = view === null ? history.length - 1 : view;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); showPly(Math.max(0, cur - 1)); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); if (view !== null) showPly(view + 1 >= history.length ? null : view + 1); }
+  else if (e.key === 'Escape' && view !== null) showPly(null);
+});
+if (!window.gambitNet.available) modeSel.querySelector('[value=online]').remove();
+modeSel.addEventListener('change', () => { if (!online()) net.leave(); if (!thinking) reset(false); });
+sideSel.addEventListener('change', () => { if (!thinking) reset(false); });
+try { const lv = localStorage.getItem('gambit-level'); if (lv) levelSel.value = lv; } catch (e) {}
+levelSel.addEventListener('change', () => { try { localStorage.setItem('gambit-level', levelSel.value); } catch (e) {} });
+
+// Keep the game in progress across page updates
+function start(data) {
+  if (data && data.mode) { modeSel.value = data.mode; sideSel.value = data.side; if (data.level) levelSel.value = data.level; }
+  reset(false);
+  if (data && data.moves) {
+    for (const mv of data.moves) {
+      const m = legal(G).find(x => x.from === mv.from && x.to === mv.to && (x.promo || null) === (mv.promo || null));
+      if (!m) break;
+      const notation = san(G, m, legal(G)); make(G, m); history.push({ m, san: notation }); keys.push(posKey(G));
+    }
+    if (typeof data.flipped === 'boolean') flipped = data.flipped;
+    if (data.resigned) resigned = data.resigned;
+    if (gameResult().over) { analyze(); return; }
+    render(); maybeAI();
+  }
+}
+window.claude?.hot?.snapshot?.(() => ({
+  mode: modeSel.value, side: sideSel.value, level: levelSel.value, flipped, resigned,
+  moves: history.map(h => ({ from: h.m.from, to: h.m.to, promo: h.m.promo || null }))
+}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+<script>
+// ---------- Russian draughts ----------
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const t = (k, v) => window.gambitI18n.t(k, v);
+const FILES = 'abcdefgh', sqName = i => FILES[i & 7] + (8 - (i >> 3));
+const DIRS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+const isKing = p => p === 'W' || p === 'B';
+const colorOf = p => (p ? (p === 'w' || p === 'W' ? 'w' : 'b') : null);
+const opp = c => (c === 'w' ? 'b' : 'w');
+const onB = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+const lastRow = col => (col === 'w' ? 0 : 7);
+
+function initBoard() {
+  const b = new Array(64).fill(null);
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    if ((r + c) % 2 !== 1) continue;
+    if (r < 3) b[r * 8 + c] = 'b'; else if (r > 4) b[r * 8 + c] = 'w';
+  }
+  return b;
+}
+
+// All complete capture sequences from `sq`. Captured pieces stay on the board until the move ends
+// (they block and cannot be jumped twice); a man reaching the last row continues as a king.
+function jumps(b, sq, p, col, path, capt, crowned) {
+  const king = isKing(p) || crowned, r = sq >> 3, c = sq & 7, out = [];
+  for (const [dr, dc] of DIRS) {
+    if (!king) {
+      const r2 = r + 2 * dr, c2 = c + 2 * dc;
+      if (!onB(r2, c2)) continue;
+      const mid = (r + dr) * 8 + c + dc, land = r2 * 8 + c2;
+      if (colorOf(b[mid]) !== opp(col) || capt.includes(mid) || b[land]) continue;
+      out.push(...jumps(b, land, p, col, [...path, land], [...capt, mid], crowned || r2 === lastRow(col)));
+    } else {
+      let r1 = r + dr, c1 = c + dc;
+      while (onB(r1, c1) && !b[r1 * 8 + c1]) { r1 += dr; c1 += dc; }
+      if (!onB(r1, c1)) continue;
+      const mid = r1 * 8 + c1;
+      if (colorOf(b[mid]) !== opp(col) || capt.includes(mid)) continue;
+      const subs = [];
+      let r2 = r1 + dr, c2 = c1 + dc;
+      while (onB(r2, c2) && !b[r2 * 8 + c2]) {
+        const land = r2 * 8 + c2;
+        subs.push(jumps(b, land, p, col, [...path, land], [...capt, mid], true));
+        r2 += dr; c2 += dc;
+      }
+      // A king must land where it can keep capturing, if such a square exists
+      const cont = subs.filter(s => s[0].path.length > path.length + 1);
+      for (const s of (cont.length ? cont : subs)) out.push(...s);
+    }
+  }
+  if (!out.length && path.length > 1) out.push({ from: path[0], to: sq, path, caps: capt, promo: !isKing(p) && crowned });
+  return out;
+}
+
+function genMoves(b, col) {
+  let caps = [];
+  for (let i = 0; i < 64; i++) {
+    const p = b[i];
+    if (colorOf(p) !== col) continue;
+    const b2 = b.slice(); b2[i] = null;
+    caps = caps.concat(jumps(b2, i, p, col, [i], [], false));
+  }
+  if (caps.length) return caps;
+  const ms = [];
+  for (let i = 0; i < 64; i++) {
+    const p = b[i];
+    if (colorOf(p) !== col) continue;
+    const r = i >> 3, c = i & 7;
+    for (const [dr, dc] of DIRS) {
+      if (!isKing(p)) {
+        if (dr !== (col === 'w' ? -1 : 1)) continue;
+        const r1 = r + dr, c1 = c + dc, to = r1 * 8 + c1;
+        if (onB(r1, c1) && !b[to]) ms.push({ from: i, to, path: [i, to], caps: [], promo: r1 === lastRow(col) });
+      } else {
+        let r1 = r + dr, c1 = c + dc;
+        while (onB(r1, c1) && !b[r1 * 8 + c1]) {
+          const to = r1 * 8 + c1;
+          ms.push({ from: i, to, path: [i, to], caps: [], promo: false });
+          r1 += dr; c1 += dc;
+        }
+      }
+    }
+  }
+  return ms;
+}
+
+function apply(b, m) {
+  const nb = b.slice(), p = nb[m.from];
+  nb[m.from] = null;
+  for (const x of m.caps) nb[x] = null;
+  nb[m.to] = m.promo ? p.toUpperCase() : p;
+  return nb;
+}
+
+const notation = m => m.path.map(sqName).join(m.caps.length ? ':' : '-');
+
+// ---------- Bot ----------
+function evaluate(b, col) {
+  let s = 0;
+  for (let i = 0; i < 64; i++) {
+    const p = b[i];
+    if (!p) continue;
+    const r = i >> 3, c = i & 7;
+    let v = isKing(p) ? 300 : 100 + (p === 'w' ? 7 - r : r) * 4;
+    if (c >= 2 && c <= 5 && r >= 2 && r <= 5) v += 6;
+    s += colorOf(p) === 'w' ? v : -v;
+  }
+  return col === 'w' ? s : -s;
+}
+
+function negamax(b, col, depth, alpha, beta, ply) {
+  const ms = genMoves(b, col);
+  if (!ms.length) return -10000 + ply;
+  // Keep searching through capture chains so the bot sees the recapture
+  if (depth <= 0 && (!ms[0].caps.length || depth < -6)) return evaluate(b, col);
+  ms.sort((x, y) => y.caps.length - x.caps.length);
+  for (const m of ms) {
+    const v = -negamax(apply(b, m), opp(col), depth - 1, -beta, -alpha, ply + 1);
+    if (v >= beta) return beta;
+    if (v > alpha) alpha = v;
+  }
+  return alpha;
+}
+
+function searchMove(b, col, depth, noise) {
+  const ms = genMoves(b, col);
+  let best = ms[0], bestV = -Infinity;
+  for (const m of ms) {
+    const v = -negamax(apply(b, m), opp(col), depth - 1, -Infinity, Infinity, 1) + (Math.random() - 0.5) * 2 * noise;
+    if (v > bestV) { bestV = v; best = m; }
+  }
+  return best;
+}
+
+function botMove(b, col, level) {
+  const ms = genMoves(b, col);
+  if (!ms.length) return null;
+  if (level === 'easy') return ms[Math.floor(Math.random() * ms.length)];
+  if (level === 'medium') return Math.random() < 0.15 ? ms[Math.floor(Math.random() * ms.length)] : searchMove(b, col, 3, 40);
+  return searchMove(b, col, 7, 4);
+}
+
+// ---------- Game ----------
+const modeSel = $('ckMode'), sideSel = $('ckSide'), levelSel = $('ckLevel'), boardEl = $('ckBoard');
+let S, hist, sel = null, targets = [], flipped = false, thinking = false;
+const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
+const online = () => modeSel.value === 'online';
+const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
+  side: () => sideSel.value,
+  start: () => reset(),
+  message: msg => {
+    if (msg.t === 'new') reset();
+    else if (msg.t === 'move' && S.turn !== net.color() && !result().over && Array.isArray(msg.path)) {
+      const m = genMoves(S.b, S.turn).find(x => x.path.join() === msg.path.join());
+      if (m) play(m, true);
+    }
+  },
+  change: () => render(),
+  enter: () => { setGame('checkers'); modeSel.value = 'online'; reset(); }
+});
+
+function result() {
+  const ms = genMoves(S.b, S.turn);
+  if (!ms.length) return { key: S.turn === 'w' ? 'ckWinB' : 'ckWinW', over: true };
+  if (S.kc >= 30) return { key: 'ckDraw', over: true };
+  return { over: false, moves: ms };
+}
+
+function reset() {
+  S = { b: initBoard(), turn: 'w', kc: 0 };
+  hist = []; sel = null; targets = []; thinking = false;
+  flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
+  render(); maybeAI();
+}
+
+function play(m, remote) {
+  const kingMove = isKing(S.b[m.from]);
+  if (online() && !remote) net.send({ t: 'move', path: m.path });
+  hist.push({ b: S.b, turn: S.turn, kc: S.kc, m, san: notation(m) });
+  S.b = apply(S.b, m);
+  S.kc = m.caps.length || !kingMove ? 0 : S.kc + 1;
+  S.turn = opp(S.turn);
+  sel = null; targets = [];
+  render(); maybeAI();
+}
+
+function maybeAI() {
+  if (S.turn !== aiColor() || result().over) return;
+  thinking = true; render();
+  setTimeout(() => {
+    const m = botMove(S.b, S.turn, levelSel.value);
+    thinking = false;
+    if (m) play(m); else render();
+  }, 450);
+}
+
+function undo() {
+  if (thinking || !hist.length || online()) return;
+  do { const h = hist.pop(); S.b = h.b; S.turn = h.turn; S.kc = h.kc; } while (hist.length && S.turn === aiColor());
+  sel = null; targets = [];
+  render(); maybeAI();
+}
+
+function onSquare(i) {
+  if (thinking) return;
+  const res = result();
+  if (res.over || S.turn === aiColor() || (online() && S.turn !== net.color())) return;
+  const hit = targets.find(m => m.to === i);
+  if (sel !== null && hit) { play(hit); return; }
+  const mine = res.moves.filter(m => m.from === i);
+  if (mine.length && sel !== i) { sel = i; targets = mine; } else { sel = null; targets = []; }
+  render();
+}
+
+function disc(p) {
+  const crown = isKing(p) ? '<path class="crown" d="M12.5 23.5l-1-9.5 4.8 4.3L20 12l3.7 6.3 4.8-4.3-1 9.5z"/>' : '';
+  return `<svg class="ck ${colorOf(p)}" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="15"/><circle cx="20" cy="19" r="15"/><circle class="ln" cx="20" cy="19" r="10"/>${crown}</svg>`;
+}
+
+function render() {
+  const res = result();
+  const last = hist.length ? hist[hist.length - 1].m : null;
+  const forced = !res.over && res.moves[0].caps.length > 0;
+  const mustFrom = forced && sel === null && S.turn !== aiColor() ? new Set(res.moves.map(m => m.from)) : new Set();
+  let html = '';
+  for (let k = 0; k < 64; k++) {
+    const i = flipped ? 63 - k : k, r = i >> 3, c = i & 7, p = S.b[i];
+    const cls = ['sq'];
+    if ((r + c) % 2) cls.push('d');
+    if (last && last.path.includes(i)) cls.push('last');
+    if (i === sel) cls.push('sel');
+    if (mustFrom.has(i)) cls.push('must');
+    if (targets.some(m => m.to === i)) cls.push('tgt');
+    let co = '';
+    if (k % 8 === 0) co += `<span class="co r">${8 - r}</span>`;
+    if (k >= 56) co += `<span class="co f">${FILES[c]}</span>`;
+    html += `<button class="${cls.join(' ')}" data-i="${i}" aria-label="${sqName(i)}${p ? ' ' + p : ''}">${co}${p ? disc(p) : ''}</button>`;
+  }
+  boardEl.innerHTML = html;
+
+  const st = $('ckStatus');
+  st.className = 'status' + (res.over ? ' over' : forced ? ' chk' : '');
+  if (res.over) st.innerHTML = t(res.key);
+  else {
+    let txt = thinking ? t('thinking') : t(S.turn === 'w' ? 'turnW' : 'turnB') + (forced ? '. ' + t('ckMust') : '');
+    if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : t(S.turn === 'w' ? 'turnW' : 'turnB') + t(S.turn === net.color() ? 'onYour' : 'onTheirs') + (forced && S.turn === net.color() ? '. ' + t('ckMust') : '');
+    st.innerHTML = `<span class="dot ${S.turn}"></span><span>${txt}</span>`;
+  }
+  const count = col => S.b.filter(p => colorOf(p) === col).length;
+  $('ckLeft').textContent = t('ckLeft', { w: count('w'), b: count('b') });
+
+  const mv = $('ckMoves');
+  if (!hist.length) mv.innerHTML = `<span class="empty">${t('empty')}</span>`;
+  else {
+    let s = '';
+    for (let i = 0; i < hist.length; i += 2) {
+      s += `<span class="n">${i / 2 + 1}.</span><span class="${i === hist.length - 1 ? 'cur' : ''}">${hist[i].san}</span>`;
+      s += hist[i + 1] ? `<span class="${i + 1 === hist.length - 1 ? 'cur' : ''}">${hist[i + 1].san}</span>` : '<span></span>';
+    }
+    mv.innerHTML = s;
+    mv.scrollTop = mv.scrollHeight;
+  }
+  $('ckUndo').disabled = thinking || !hist.length || online();
+  $('ckAiOpts').hidden = !(modeSel.value === 'ai' || online());
+  levelSel.closest('label').hidden = online();
+  sideSel.disabled = online() && net.active();
+  $('ckOnlineBox').hidden = !online();
+}
+
+boardEl.addEventListener('click', e => {
+  const sq = e.target.closest('[data-i]');
+  if (sq) onSquare(+sq.dataset.i);
+});
+$('ckNew').addEventListener('click', () => {
+  if (thinking) return;
+  reset();
+  if (online()) net.send({ t: 'new' });
+});
+$('ckUndo').addEventListener('click', undo);
+$('ckFlip').addEventListener('click', () => { flipped = !flipped; render(); });
+if (!window.gambitNet.available) modeSel.querySelector('[value=online]').remove();
+modeSel.addEventListener('change', () => { if (!online()) net.leave(); if (!thinking) reset(); });
+sideSel.addEventListener('change', () => { if (!thinking) reset(); });
+document.addEventListener('gambit-lang', render);
+
+// ---------- Game switch ----------
+const tagEl = document.querySelector('header .tag');
+function setGame(g) {
+  $('chessApp').hidden = g !== 'chess';
+  $('checkersApp').hidden = g !== 'checkers';
+  for (const b of document.querySelectorAll('[data-game]')) b.setAttribute('aria-pressed', String(b.dataset.game === g));
+  tagEl.dataset.t = g === 'chess' ? 'tag' : 'ckTag';
+  window.gambitI18n.apply();
+  try { localStorage.setItem('gambit-game', g); } catch (e) {}
+}
+for (const b of document.querySelectorAll('[data-game]')) b.addEventListener('click', () => setGame(b.dataset.game));
+
+reset();
+let saved = 'chess';
+try { if (localStorage.getItem('gambit-game') === 'checkers') saved = 'checkers'; } catch (e) {}
+setGame(saved);
+const q = new URLSearchParams(location.search);
+if (q.get('join')) {
+  const g = q.get('game') === 'checkers' ? 'checkers' : 'chess';
+  setGame(g);
+  window.gambitNet.joinFromLink(g, q.get('join'));
+}
+})();
+</script>
+</body>
+</html>
