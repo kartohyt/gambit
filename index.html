@@ -244,6 +244,16 @@ table.users .num { font-variant-numeric: tabular-nums; text-align: right; }
 .pill.good { background: #4f9a35; }
 .pill.bad { background: var(--danger); }
 button.b.danger { border-color: var(--danger); color: var(--danger); }
+.player { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.player .bn { font-family: var(--f-mono); font-weight: 600; }
+.player .belo { color: var(--muted); font-variant-numeric: tabular-nums; }
+.title-badge { background: #c4302b; color: #fff; font-family: var(--f-mono); font-weight: 700; font-size: .68rem; letter-spacing: .05em; padding: 2px 5px; border-radius: 3px; line-height: 1.2; }
+.flag { width: 20px; height: 15px; border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
+.rating-note { font-size: .86rem; color: var(--muted); min-height: 0; }
+.rating-note .up { color: #4f9a35; font-weight: 600; }
+.rating-note .down { color: var(--danger); font-weight: 600; }
+.bot-elo { font-size: .78rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.auth-form select { font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; }
 .rules { margin: 0; font-size: .88rem; color: var(--muted); max-width: 65ch; }
 .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
@@ -286,6 +296,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
     <aside class="side">
       <div class="card">
         <div class="status" id="status" aria-live="polite"></div>
+        <div class="rating-note" id="ratingNote" aria-live="polite"></div>
         <div class="caps">
           <div id="capTop"></div>
           <div id="capBot"></div>
@@ -313,6 +324,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
               <option value="medium" data-t="medium">Средняя</option>
               <option value="hard" data-t="hard">Сложная</option>
             </select>
+            <span class="bot-elo" id="botElo"></span>
           </label>
         </div>
         <div class="online" id="onlineBox" hidden></div>
@@ -360,6 +372,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
     <aside class="side">
       <div class="card">
         <div class="status" id="ckStatus" aria-live="polite"></div>
+        <div class="rating-note" id="ckRatingNote" aria-live="polite"></div>
         <div class="tag" id="ckLeft"></div>
       </div>
 
@@ -384,6 +397,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
               <option value="medium" data-t="medium">Средняя</option>
               <option value="hard" data-t="hard">Сложная</option>
             </select>
+            <span class="bot-elo" id="ckBotElo"></span>
           </label>
         </div>
         <div class="online" id="ckOnlineBox" hidden></div>
@@ -457,11 +471,14 @@ window.gambitAuth = (() => {
     if (mine === loadSeq) { profile = p; admin = a; }
   }
 
-  async function createProfile(nick) {
+  async function createProfile(nick, country) {
     const u = auth.currentUser, lower = nick.toLowerCase();
     const batch = db.batch();
     batch.set(db.collection('nicks').doc(lower), { uid: u.uid });
-    batch.set(db.collection('users').doc(u.uid), { nick, nickLower: lower, createdAt: ts(), lastSeen: ts(), games: 0, banned: false });
+    batch.set(db.collection('users').doc(u.uid), {
+      nick, nickLower: lower, createdAt: ts(), lastSeen: ts(), games: 0, banned: false,
+      country: country || '', elo: { chess: 1000, checkers: 1000 }, rated: { chess: 0, checkers: 0 }
+    });
     try { await batch.commit(); }
     catch (e) {
       if (e.code === 'permission-denied') {
@@ -474,6 +491,54 @@ window.gambitAuth = (() => {
     await loadProfile(u);
   }
 
+  // ---------- Ratings and the player badge ----------
+  const COUNTRIES = 'ad ae af ag ai al am ao ar as at au aw ax az ba bb bd be bf bg bh bi bj bl bm bn bo br bs bt bw by bz ca cd cf cg ch ci ck cl cm cn co cr cu cv cw cy cz de dj dk dm do dz ec ee eg er es et fi fj fk fm fo fr ga gb gd ge gg gh gi gl gm gn gq gr gt gu gw gy hk hn hr ht hu id ie il im in iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mr ms mt mu mv mw mx my mz na nc ne ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg si sk sl sm sn so sr ss st sv sx sy sz tc td tg th tj tl tm tn to tr tt tv tw tz ua ug us uy uz va vc ve vg vi vn vu ws xk ye za zm zw'.split(' ');
+  const eloOf = (p, game) => (p && p.elo && p.elo[game]) || 1000;
+  const ratedOf = (p, game) => (p && p.rated && p.rated[game]) || 0;
+  function regionName(cc) {
+    try { return new Intl.DisplayNames([document.documentElement.lang || 'ru'], { type: 'region' }).of(cc.toUpperCase()); }
+    catch (e) { return cc.toUpperCase(); }
+  }
+  function flag(cc) {
+    if (!/^[a-z]{2}$/.test(cc || '')) return '';
+    const name = esc(regionName(cc));
+    return `<img class="flag" src="https://flagcdn.com/w20/${cc}.png" srcset="https://flagcdn.com/w40/${cc}.png 2x" width="20" height="15" alt="${name}" title="${name}">`;
+  }
+  // ADMIN Kartoh (1000) [flag]
+  function badge(p) {
+    return `<span class="player">${p.admin ? '<span class="title-badge">ADMIN</span>' : ''}<span class="bn">${esc(p.nick)}</span>`
+      + `<span class="belo">(${p.elo == null ? 1000 : p.elo})</span>${flag(p.country)}</span>`;
+  }
+  function countrySelect(id, value) {
+    const opts = COUNTRIES.map(c => [c, regionName(c)]).sort((a, b) => a[1].localeCompare(b[1]));
+    return `<label class="field" for="${id}">${t('acCountry')}<select id="${id}"><option value="">${t('acNoCountry')}</option>`
+      + opts.map(([c, n]) => `<option value="${c}"${c === value ? ' selected' : ''}>${esc(n)}</option>`).join('') + '</select></label>';
+  }
+  function guessCountry() {
+    const m = /-([A-Za-z]{2})$/.exec(navigator.language || '');
+    const c = m ? m[1].toLowerCase() : '';
+    return COUNTRIES.includes(c) ? c : '';
+  }
+  // Standard Elo: K = 40 for the first 20 games, then 20
+  async function rate(game, oppElo, score) {
+    if (!(user && profile && !profile.banned)) return null;
+    const old = eloOf(profile, game), n = ratedOf(profile, game);
+    const K = n < 20 ? 40 : 20;
+    const expected = 1 / (1 + Math.pow(10, (oppElo - old) / 400));
+    const next = Math.max(100, Math.min(3500, old + Math.round(K * (score - expected))));
+    const elo = { chess: eloOf(profile, 'chess'), checkers: eloOf(profile, 'checkers'), [game]: next };
+    const rated = { chess: ratedOf(profile, 'chess'), checkers: ratedOf(profile, 'checkers'), [game]: n + 1 };
+    try {
+      await db.collection('users').doc(user.uid).update({ elo, rated, lastRated: ts() });
+      profile.elo = elo; profile.rated = rated;
+      renderAcct();
+      return { old, next, delta: next - old };
+    } catch (e) {
+      return { error: e.code === 'permission-denied' ? 'fast' : 'fail' };
+    }
+  }
+  const currentGame = () => (window.gambitCurrentGame ? window.gambitCurrentGame() : 'chess');
+
   function checkNick(nick) {
     if (!/^[A-Za-z0-9_]{3,16}$/.test(nick)) { const e = new Error(); e.code = 'nick-bad'; throw e; }
   }
@@ -485,9 +550,11 @@ window.gambitAuth = (() => {
     el.hidden = false;
     if (!ready) { el.innerHTML = ''; return; }
     if (!user) { el.innerHTML = `<button class="b" data-a="login">${t('acLogin')}</button>`; return; }
-    const name = profile ? esc(profile.nick) : esc(user.email);
+    const name = profile
+      ? badge({ nick: profile.nick, elo: eloOf(profile, currentGame()), country: profile.country, admin })
+      : esc(user.email);
     el.innerHTML = `<span class="who${profile && profile.banned ? ' banned' : ''}" title="${esc(user.email)}">${name}${profile && profile.banned ? ' · ' + t('acBanned') : ''}</span>`
-      + (!profile ? `<button class="b primary" data-a="finish">${t('acFinish')}</button>` : '')
+      + (!profile ? `<button class="b primary" data-a="finish">${t('acFinish')}</button>` : `<button class="b" data-a="profile">${t('acProfile')}</button>`)
       + (admin ? `<button class="b" data-a="admin">${t('acAdmin')}</button>` : '')
       + `<button class="b" data-a="logout">${t('acLogout')}</button>`;
   }
@@ -498,17 +565,21 @@ window.gambitAuth = (() => {
   function closeModal() { $('authModal').hidden = true; }
   function drawModal() {
     const box = $('authBox');
-    const tabs = mode === 'nick' ? '' : `<div class="tabs" role="tablist">
+    const tabs = mode === 'nick' || mode === 'profile' ? '' : `<div class="tabs" role="tablist">
         <button class="b" role="tab" data-m="login" aria-selected="${mode === 'login'}">${t('acLogin')}</button>
         <button class="b" role="tab" data-m="register" aria-selected="${mode === 'register'}">${t('acRegister')}</button></div>`;
     const f = (id, type, label, ac, extra = '') => `<label class="field" for="${id}">${label}<input id="${id}" type="${type}" autocomplete="${ac}" ${extra}></label>`;
     let body = '';
     if (mode === 'login') body = f('auEmail', 'email', t('acEmail'), 'email') + f('auPass', 'password', t('acPass'), 'current-password');
     else if (mode === 'register') body = f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`
+      + countrySelect('auCountry', guessCountry())
       + f('auEmail', 'email', t('acEmail'), 'email') + f('auPass', 'password', t('acPass'), 'new-password') + `<div class="hint">${t('acPassHint')}</div>`;
-    else body = `<p class="hint">${t('acNickStep')}</p>` + f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`;
+    else if (mode === 'profile') body = `<div>${badge({ nick: profile.nick, elo: eloOf(profile, currentGame()), country: profile.country, admin })}</div>`
+      + countrySelect('auCountry', profile.country || '');
+    else body = `<p class="hint">${t('acNickStep')}</p>` + f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`
+      + countrySelect('auCountry', guessCountry());
     const label = mode === 'login' ? t('acLogin') : mode === 'register' ? t('acCreate') : t('acSave');
-    box.innerHTML = `<div class="modal-head"><h2 id="authTitle">${mode === 'nick' ? t('acFinish') : t('acTitle')}</h2>
+    box.innerHTML = `<div class="modal-head"><h2 id="authTitle">${mode === 'nick' ? t('acFinish') : mode === 'profile' ? t('acProfile') : t('acTitle')}</h2>
         <button class="b x" data-a="close" aria-label="${t('cancel')}">×</button></div>${tabs}
       <form id="authForm" class="auth-form">${body}
         ${msg ? `<div class="${msgOk ? 'okmsg' : 'warn'}" role="alert">${esc(msg)}</div>` : ''}
@@ -519,9 +590,13 @@ window.gambitAuth = (() => {
   async function submit() {
     // Read the form before redrawing it: the redraw replaces the inputs
     const v = id => ($(id) ? $(id).value.trim() : '');
-    const nick = v('auNick'), email = v('auEmail'), pass = $('auPass') ? $('auPass').value : '';
+    const nick = v('auNick'), email = v('auEmail'), pass = $('auPass') ? $('auPass').value : '', country = v('auCountry');
     busy = true; msg = ''; drawModal();
-    const keep = () => { if ($('auNick')) $('auNick').value = nick; if ($('auEmail')) $('auEmail').value = email; };
+    const keep = () => {
+      if ($('auNick')) $('auNick').value = nick;
+      if ($('auEmail')) $('auEmail').value = email;
+      if ($('auCountry')) $('auCountry').value = country;
+    };
     keep();
     try {
       if (mode === 'login') {
@@ -532,10 +607,15 @@ window.gambitAuth = (() => {
         if (taken.exists) { const e = new Error(); e.code = 'nick-taken'; throw e; }
         pendingNick = nick;
         await auth.createUserWithEmailAndPassword(email, pass);
-        await createProfile(nick);
+        await createProfile(nick, country);
+      } else if (mode === 'profile') {
+        await db.collection('users').doc(user.uid).update({ country });
+        profile.country = country;
+        busy = false; msg = t('acSaved'); msgOk = true; drawModal(); keep(); renderAcct(); emit();
+        return;
       } else {
         checkNick(nick);
-        await createProfile(nick);
+        await createProfile(nick, country);
       }
       busy = false;
       if (!profile) { mode = 'nick'; drawModal(); return; }
@@ -588,12 +668,13 @@ window.gambitAuth = (() => {
   function drawUsers() {
     const q = adminQuery.toLowerCase();
     const rows = users.filter(u => !q || (u.nickLower || '').includes(q));
-    $('adminUsers').innerHTML = `<thead><tr><th>${t('acNick')}</th><th>${t('adJoined')}</th><th>${t('adSeen')}</th><th>${t('adGames')}</th><th>${t('adStatus')}</th><th></th></tr></thead><tbody>`
+    $('adminUsers').innerHTML = `<thead><tr><th>${t('acNick')}</th><th>${t('adJoined')}</th><th>${t('adSeen')}</th><th>${t('adGames')}</th><th>${t('adElo')}</th><th>${t('adStatus')}</th><th></th></tr></thead><tbody>`
       + (rows.length ? rows.map(u => `<tr>
-          <td class="nick">${esc(u.nick)}</td><td>${fmtDate(u.createdAt)}</td><td>${fmtDate(u.lastSeen)}</td><td class="num">${u.games || 0}</td>
+          <td class="nick">${badge({ nick: u.nick, elo: eloOf(u, currentGame()), country: u.country, admin: u.id === user.uid })}</td><td>${fmtDate(u.createdAt)}</td><td>${fmtDate(u.lastSeen)}</td><td class="num">${u.games || 0}</td>
+          <td class="num">${eloOf(u, 'chess')} / ${eloOf(u, 'checkers')}</td>
           <td>${u.banned ? `<span class="pill bad">${t('adBannedOne')}</span>` : `<span class="pill good">${t('adActiveOne')}</span>`}</td>
           <td>${u.id === user.uid ? `<span class="hint">${t('adYou')}</span>` : `<button class="b${u.banned ? '' : ' danger'}" data-ban="${u.id}" data-to="${!u.banned}">${u.banned ? t('adUnban') : t('adBan')}</button>`}</td>
-        </tr>`).join('') : `<tr><td colspan="6" class="hint">${t('adNone')}</td></tr>`) + '</tbody>';
+        </tr>`).join('') : `<tr><td colspan="7" class="hint">${t('adNone')}</td></tr>`) + '</tbody>';
   }
   async function setBan(id, to, btn) {
     btn.disabled = true;
@@ -629,6 +710,7 @@ window.gambitAuth = (() => {
       const a = b.dataset.a;
       if (a === 'login') openModal('login');
       else if (a === 'finish') openModal('nick');
+      else if (a === 'profile') openModal('profile');
       else if (a === 'logout') { auth.signOut(); $('adminApp').hidden = true; window.gambitSetGame && window.gambitSetGame(); }
       else if (a === 'admin') openAdmin();
     });
@@ -650,6 +732,7 @@ window.gambitAuth = (() => {
     $('adminRefresh').addEventListener('click', loadAdmin);
     $('adminSearch').addEventListener('input', e => { adminQuery = e.target.value.trim(); drawUsers(); });
     $('adminUsers').addEventListener('click', e => { const b = e.target.closest('[data-ban]'); if (b) setBan(b.dataset.ban, b.dataset.to === 'true', b); });
+    document.addEventListener('gambit-game', renderAcct);
     document.addEventListener('gambit-lang', () => { renderAcct(); if (!$('authModal').hidden) drawModal(); if (!$('adminApp').hidden) loadAdmin(); });
   }
 
@@ -659,6 +742,10 @@ window.gambitAuth = (() => {
     onReady: f => (ready ? f() : readyWaiters.push(f)),
     onChange: f => changeListeners.push(f),
     user: () => user, profile: () => profile,
+    elo: game => eloOf(profile, game), country: () => (profile && profile.country) || '', isAdmin: () => admin,
+    // Re-read the profile (the rating may have changed in another tab) before it goes into a game
+    refresh: async () => { if (user) { await loadProfile(user); renderAcct(); } },
+    badge, rate,
     canPlay: () => !!(user && profile && !profile.banned),
     banned: () => !!(profile && profile.banned),
     // Ask the player to sign in, then carry on with what they were doing
@@ -689,7 +776,7 @@ window.gambitNet = (() => {
   }
 
   function create(game, box, cb) {
-    let state = 'idle', code = '', myColor = null, oppNick = '', err = '', copied = false, unsub = null, ref = null;
+    let state = 'idle', code = '', myColor = null, opp = null, err = '', copied = false, unsub = null, ref = null;
     const roomKey = 'gambit-room-' + game;
 
     function stop() { if (unsub) unsub(); unsub = null; }
@@ -714,7 +801,9 @@ window.gambitNet = (() => {
         const amHost = g.host === me;
         if (!g.guest) { if (amHost && state !== 'waiting') setState('waiting'); return; }
         myColor = amHost ? g.hostColor : g.hostColor === 'w' ? 'b' : 'w';
-        oppNick = amHost ? g.guestNick : g.hostNick;
+        opp = amHost
+          ? { nick: g.guestNick, elo: g.guestElo, country: g.guestCountry, admin: !!g.guestAdmin }
+          : { nick: g.hostNick, elo: g.hostElo, country: g.hostCountry, admin: !!g.hostAdmin };
         if (state !== 'connected') { setState('connected'); cb.start(myColor); countGame(); }
         cb.applyState({ round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null });
       }, e => fail(A.errText(e)));
@@ -723,6 +812,7 @@ window.gambitNet = (() => {
     async function host(side) {
       if (!A.canPlay()) { A.prompt(() => host(side)); return; }
       setState('opening');
+      await A.refresh();
       const db = A.db(), me = A.user().uid, nick = A.profile().nick;
       for (let i = 0; i < 4; i++) {
         code = makeCode();
@@ -730,6 +820,7 @@ window.gambitNet = (() => {
         try {
           await ref.set({
             game, host: me, hostNick: nick, hostColor: side === 'b' ? 'b' : 'w', guest: null, guestNick: null,
+            hostElo: A.elo(game), hostCountry: A.country(), hostAdmin: A.isAdmin(),
             round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts()
           });
           copied = false; remember(); watch();
@@ -746,6 +837,7 @@ window.gambitNet = (() => {
       if (!c1) return;
       if (!A.canPlay()) { A.prompt(() => join(c1)); return; }
       code = c1; setState('connecting');
+      await A.refresh();
       ref = A.db().collection('games').doc(code);
       try {
         const snap = await ref.get();
@@ -753,7 +845,7 @@ window.gambitNet = (() => {
         const g = snap.data(), me = A.user().uid;
         if (g.game !== game) { fail(t('onWrongGame')); return; }
         if (g.host !== me && g.guest && g.guest !== me) { fail(t('onFull')); return; }
-        if (g.host !== me && !g.guest) await ref.update({ guest: me, guestNick: A.profile().nick, updatedAt: A.ts() });
+        if (g.host !== me && !g.guest) await ref.update({ guest: me, guestNick: A.profile().nick, guestElo: A.elo(game), guestCountry: A.country(), guestAdmin: A.isAdmin(), updatedAt: A.ts() });
         remember(); watch();
       } catch (e) { fail(A.errText(e)); }
     }
@@ -787,7 +879,7 @@ window.gambitNet = (() => {
           <button class="b" data-act="leave">${t('cancel')}</button></div>
           <div class="muted">${t('onWaiting')}</div>`;
       } else if (state === 'connected') {
-        h += `<div class="ok">${esc(t('onVs', { n: oppNick || '?' }))}</div>
+        h += `<div class="ok">${t('onVs')} ${opp ? A.badge(opp) : '?'}</div>
           <div class="muted">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
           ${err ? `<div class="warn">${esc(err)}</div>` : ''}
           <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
@@ -818,6 +910,7 @@ window.gambitNet = (() => {
     const session = {
       join, leave, draw, push,
       color: () => (state === 'connected' ? myColor : null),
+      oppElo: () => (opp && typeof opp.elo === 'number' ? opp.elo : 1000),
       active: () => state === 'connected',
       waiting: () => state === 'waiting',
       saved: () => { try { return sessionStorage.getItem(roomKey) || ''; } catch (e) { return ''; } }
@@ -870,6 +963,11 @@ const I18N = {
     prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
+    rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
+    rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
+    rtFast: 'Партия без рейтинга: прошло меньше 15 секунд после прошлой.', rtFail: 'Не удалось сохранить рейтинг.',
+    rtSaving: 'Считаем рейтинг…', rtGuest: 'Войдите, чтобы партии шли в рейтинг.', rtBot: 'Рейтинг бота: {e}',
+    acProfile: 'Профиль', acCountry: 'Страна', acNoCountry: '— не указывать —', acSaved: 'Сохранено.', adElo: 'Эло (шахм. / шашки)',
     acLogin: 'Войти', acRegister: 'Регистрация', acTitle: 'Аккаунт', acCreate: 'Создать аккаунт', acSave: 'Сохранить',
     acLogout: 'Выйти', acAdmin: 'Админка', acFinish: 'Завершить регистрацию', acBanned: 'заблокирован',
     acNick: 'Ник', acEmail: 'Почта', acPass: 'Пароль', acForgot: 'Забыли пароль?',
@@ -882,7 +980,7 @@ const I18N = {
     aeNickTaken: 'Этот ник уже занят.', aeNickBad: 'Ник: 3–16 символов, латиница, цифры и _.', aeNickReserved: 'Этот ник занять нельзя.',
     aeDenied: 'Нет доступа. Возможно, аккаунт заблокирован.', aeOther: 'Ошибка: {e}',
     onNeedLogin: 'Чтобы играть онлайн, войдите или зарегистрируйтесь.', onBanned: 'Ваш аккаунт заблокирован: онлайн-игра недоступна.',
-    onVs: 'Соперник: {n}', onWrongGame: 'этот код от другой игры', onFull: 'в этой игре уже двое игроков',
+    onVs: 'Соперник:', onWrongGame: 'этот код от другой игры', onFull: 'в этой игре уже двое игроков',
     adTitle: 'Админ-панель', adRefresh: 'Обновить', adBack: 'К игре', adPlayersH: 'Игроки', adSearch: 'Поиск по нику', adLoading: 'Загрузка…',
     adPlayers: 'Игроков всего', adActive: 'Заходили за сутки', adBannedN: 'Заблокировано', adToday: 'Партий сегодня', adWeek: 'Партий за неделю', adMonth: 'Партий за 30 дней',
     adJoined: 'Регистрация', adSeen: 'Был в сети', adGames: 'Партий', adStatus: 'Статус', adBannedOne: 'бан', adActiveOne: 'активен',
@@ -917,6 +1015,11 @@ const I18N = {
     prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
+    rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
+    rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
+    rtFast: 'Unrated game: less than 15 seconds since the last one.', rtFail: 'Could not save the rating.',
+    rtSaving: 'Updating the rating…', rtGuest: 'Sign in to have your games rated.', rtBot: 'Bot rating: {e}',
+    acProfile: 'Profile', acCountry: 'Country', acNoCountry: '— not shown —', acSaved: 'Saved.', adElo: 'Elo (chess / checkers)',
     acLogin: 'Sign in', acRegister: 'Sign up', acTitle: 'Account', acCreate: 'Create account', acSave: 'Save',
     acLogout: 'Sign out', acAdmin: 'Admin', acFinish: 'Finish sign-up', acBanned: 'banned',
     acNick: 'Nickname', acEmail: 'E-mail', acPass: 'Password', acForgot: 'Forgot your password?',
@@ -929,7 +1032,7 @@ const I18N = {
     aeNickTaken: 'This nickname is taken.', aeNickBad: 'Nickname: 3–16 characters, Latin letters, digits and _.', aeNickReserved: 'This nickname cannot be taken.',
     aeDenied: 'Access denied. The account may be banned.', aeOther: 'Error: {e}',
     onNeedLogin: 'Sign in or sign up to play online.', onBanned: 'Your account is banned: online play is unavailable.',
-    onVs: 'Opponent: {n}', onWrongGame: 'this code belongs to the other game', onFull: 'this game already has two players',
+    onVs: 'Opponent:', onWrongGame: 'this code belongs to the other game', onFull: 'this game already has two players',
     adTitle: 'Admin panel', adRefresh: 'Refresh', adBack: 'Back to the game', adPlayersH: 'Players', adSearch: 'Search by nickname', adLoading: 'Loading…',
     adPlayers: 'Players', adActive: 'Seen in the last 24 h', adBannedN: 'Banned', adToday: 'Games today', adWeek: 'Games this week', adMonth: 'Games in 30 days',
     adJoined: 'Signed up', adSeen: 'Last seen', adGames: 'Games', adStatus: 'Status', adBannedOne: 'banned', adActiveOne: 'active',
@@ -1354,6 +1457,49 @@ const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
 let round = 0; // bumped by "New game" so both players know to start over
 const encMove = m => m.from + '-' + m.to + (m.promo ? '-' + m.promo : '');
+
+// ---------- Rating ----------
+// Bot strength on the Elo scale, so a win over the weak bot is worth almost nothing
+const BOT_ELO = { easy: 400, medium: 1000, hard: 1500 };
+const A = () => window.gambitAuth;
+let rs = {}; // this game's rating state: mode, side and bot level it started with
+let ratingNote = '';
+function newRating() {
+  rs = { mode: modeSel.value, side: sideSel.value, level: levelSel.value, unrated: '', done: false };
+}
+function myRatedColor() {
+  if (rs.mode === 'online') return net.color();
+  return rs.mode === 'ai' ? rs.side : null;
+}
+const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
+function noteFor(r, key) {
+  if (!r) return '';
+  if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
+  const d = r.delta > 0 ? `<span class="up">+${r.delta}</span>` : r.delta < 0 ? `<span class="down">${r.delta}</span>` : '±0';
+  return t(key, { a: r.old, b: r.next, d });
+}
+function setNote(html) { ratingNote = html; $('ratingNote').innerHTML = html; }
+// Called once the game is over
+function finishRated() {
+  const me = myRatedColor();
+  if (rs.done || !me || !A() || !A().available) return;
+  rs.done = true;
+  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t('rtGuest')); return; }
+  if (rs.unrated) { setNote(t(rs.unrated)); return; }
+  const key = gameResult().key;
+  const winner = { mateW: 'w', resB: 'w', mateB: 'b', resW: 'b' }[key];
+  const score = winner ? (winner === me ? 1 : 0) : 0.5;
+  setNote(t('rtSaving'));
+  A().rate('chess', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
+}
+// Leaving a rated game half-way counts as a loss, so nobody dodges a bad position
+function abandonRated() {
+  const me = myRatedColor();
+  if (rs.done || rs.unrated || !me || !A() || !A().canPlay() || gameResult().over) return;
+  if (history.filter(h => h.m.p[0] === me).length < 2) return;
+  rs.done = true;
+  A().rate('chess', ratedOppElo(), 0).then(r => setNote(noteFor(r, 'rtAbandon')));
+}
 const net = window.gambitNet.create('chess', $('onlineBox'), {
   side: () => sideSel.value,
   start: () => { round = 0; reset(false); },
@@ -1370,7 +1516,7 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
       if (!m) break;
       play(m, true);
     }
-    if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; analyze(); }
+    if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; finishRated(); analyze(); }
   },
   change: () => render(),
   enter: show => { if (show && window.gambitSetGame) window.gambitSetGame('chess'); modeSel.value = 'online'; reset(false); }
@@ -1379,6 +1525,7 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
 function reset(keepFlip) {
   G = newGame(); history = []; keys = [posKey(G)]; sel = null; targets = []; pendingPromo = null; dropSq = -1;
   resigned = null; report = null; anToken++; view = null;
+  newRating(); setNote('');
   if (!keepFlip) flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
   render(); maybeAI();
 }
@@ -1391,7 +1538,7 @@ function play(m, remote) {
   keys.push(posKey(G));
   if (online() && !remote) net.push();
   sel = null; targets = []; dropSq = m.to; view = null;
-  if (gameResult().over) { analyze(); return; }
+  if (gameResult().over) { finishRated(); analyze(); return; }
   render();
   maybeAI();
 }
@@ -1410,6 +1557,7 @@ function resign() {
   if (thinking || !history.length || gameResult().over || (online() && !net.active())) return;
   resigned = online() ? net.color() : aiColor() ? sideSel.value : G.turn;
   sel = null; targets = []; pendingPromo = null;
+  finishRated();
   analyze();
   if (online()) net.push();
 }
@@ -1417,6 +1565,8 @@ function resign() {
 function undo() {
   if (thinking || !history.length || online()) return;
   resigned = null; report = null; anToken++; view = null;
+  if (!rs.done) rs.unrated = 'rtUndo';
+  setNote(t('rtUndo'));
   // Against the computer, step back to the player's own turn
   do { unmake(G); history.pop(); keys.pop(); } while (history.length && G.turn === aiColor());
   sel = null; targets = []; pendingPromo = null; dropSq = -1;
@@ -1554,6 +1704,8 @@ function render() {
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
   $('onlineBox').hidden = !online();
+  $('botElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
+  $('ratingNote').innerHTML = ratingNote;
   renderReport();
 }
 
@@ -1570,6 +1722,7 @@ boardEl.addEventListener('click', e => {
 });
 $('newBtn').addEventListener('click', () => {
   if (thinking) return;
+  abandonRated();
   reset(false);
   if (online()) { round++; net.push(); }
 });
@@ -1608,10 +1761,16 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape' && view !== null) showPly(null);
 });
 if (!window.gambitNet.available) modeSel.querySelector('[value=online]').remove();
-modeSel.addEventListener('change', () => { if (!online()) net.leave(); if (!thinking) reset(false); });
-sideSel.addEventListener('change', () => { if (!thinking) reset(false); });
+modeSel.addEventListener('change', () => { abandonRated(); if (!online()) net.leave(); if (!thinking) reset(false); });
+sideSel.addEventListener('change', () => { abandonRated(); if (!thinking) reset(false); });
 try { const lv = localStorage.getItem('gambit-level'); if (lv) levelSel.value = lv; } catch (e) {}
-levelSel.addEventListener('change', () => { try { localStorage.setItem('gambit-level', levelSel.value); } catch (e) {} });
+levelSel.addEventListener('change', () => {
+  try { localStorage.setItem('gambit-level', levelSel.value); } catch (e) {}
+  // Before the first move the new level simply applies; later it would let a player swap in an easier bot
+  if (!history.length) rs.level = levelSel.value;
+  else if (!rs.done && !gameResult().over) { rs.unrated = 'rtLevel'; setNote(t('rtLevel')); }
+  render();
+});
 
 // Keep the game in progress across page updates
 function start(data) {
@@ -1787,6 +1946,40 @@ let S, hist, sel = null, targets = [], flipped = false, thinking = false;
 const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
 let round = 0; // bumped by "New game" so both players know to start over
+
+// ---------- Rating ----------
+const BOT_ELO = { easy: 400, medium: 1000, hard: 1600 };
+const A = () => window.gambitAuth;
+let rs = {}, ratingNote = '';
+function newRating() { rs = { mode: modeSel.value, side: sideSel.value, level: levelSel.value, unrated: '', done: false }; }
+function myRatedColor() { return rs.mode === 'online' ? net.color() : rs.mode === 'ai' ? rs.side : null; }
+const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
+function noteFor(r, key) {
+  if (!r) return '';
+  if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
+  const d = r.delta > 0 ? `<span class="up">+${r.delta}</span>` : r.delta < 0 ? `<span class="down">${r.delta}</span>` : '±0';
+  return t(key, { a: r.old, b: r.next, d });
+}
+function setNote(html) { ratingNote = html; $('ckRatingNote').innerHTML = html; }
+function finishRated() {
+  const me = myRatedColor();
+  if (rs.done || !me || !A() || !A().available) return;
+  rs.done = true;
+  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t('rtGuest')); return; }
+  if (rs.unrated) { setNote(t(rs.unrated)); return; }
+  const key = result().key;
+  const score = key === 'ckDraw' ? 0.5 : (key === 'ckWinW') === (me === 'w') ? 1 : 0;
+  setNote(t('rtSaving'));
+  A().rate('checkers', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
+}
+function abandonRated() {
+  const me = myRatedColor();
+  if (rs.done || rs.unrated || !me || !A() || !A().canPlay() || result().over) return;
+  if (hist.filter(h => h.turn === me).length < 2) return;
+  rs.done = true;
+  A().rate('checkers', ratedOppElo(), 0).then(r => setNote(noteFor(r, 'rtAbandon')));
+}
+
 const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
   side: () => sideSel.value,
   start: () => { round = 0; reset(); },
@@ -1816,6 +2009,7 @@ function result() {
 function reset() {
   S = { b: initBoard(), turn: 'w', kc: 0 };
   hist = []; sel = null; targets = []; thinking = false;
+  newRating(); setNote('');
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
   render(); maybeAI();
 }
@@ -1828,6 +2022,7 @@ function play(m, remote) {
   S.turn = opp(S.turn);
   if (online() && !remote) net.push();
   sel = null; targets = [];
+  if (result().over) finishRated();
   render(); maybeAI();
 }
 
@@ -1843,6 +2038,8 @@ function maybeAI() {
 
 function undo() {
   if (thinking || !hist.length || online()) return;
+  if (!rs.done) rs.unrated = 'rtUndo';
+  setNote(t('rtUndo'));
   do { const h = hist.pop(); S.b = h.b; S.turn = h.turn; S.kc = h.kc; } while (hist.length && S.turn === aiColor());
   sel = null; targets = [];
   render(); maybeAI();
@@ -1912,6 +2109,8 @@ function render() {
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
   $('ckOnlineBox').hidden = !online();
+  $('ckBotElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
+  $('ckRatingNote').innerHTML = ratingNote;
 }
 
 boardEl.addEventListener('click', e => {
@@ -1920,14 +2119,20 @@ boardEl.addEventListener('click', e => {
 });
 $('ckNew').addEventListener('click', () => {
   if (thinking) return;
+  abandonRated();
   reset();
   if (online()) { round++; net.push(); }
 });
 $('ckUndo').addEventListener('click', undo);
 $('ckFlip').addEventListener('click', () => { flipped = !flipped; render(); });
 if (!window.gambitNet.available) modeSel.querySelector('[value=online]').remove();
-modeSel.addEventListener('change', () => { if (!online()) net.leave(); if (!thinking) reset(); });
-sideSel.addEventListener('change', () => { if (!thinking) reset(); });
+modeSel.addEventListener('change', () => { abandonRated(); if (!online()) net.leave(); if (!thinking) reset(); });
+sideSel.addEventListener('change', () => { abandonRated(); if (!thinking) reset(); });
+levelSel.addEventListener('change', () => {
+  if (!hist.length) rs.level = levelSel.value;
+  else if (!rs.done && !result().over) { rs.unrated = 'rtLevel'; setNote(t('rtLevel')); }
+  render();
+});
 document.addEventListener('gambit-lang', render);
 
 // ---------- Game switch ----------
@@ -1941,6 +2146,7 @@ function setGame(g) {
   for (const b of document.querySelectorAll('[data-game]')) b.setAttribute('aria-pressed', String(b.dataset.game === g));
   tagEl.dataset.t = g === 'chess' ? 'tag' : 'ckTag';
   window.gambitI18n.apply();
+  document.dispatchEvent(new Event('gambit-game'));
   try { localStorage.setItem('gambit-game', g); } catch (e) {}
 }
 for (const b of document.querySelectorAll('[data-game]')) b.addEventListener('click', () => setGame(b.dataset.game));
@@ -1950,6 +2156,7 @@ let saved = 'chess';
 try { if (localStorage.getItem('gambit-game') === 'checkers') saved = 'checkers'; } catch (e) {}
 setGame(saved);
 window.gambitSetGame = setGame;
+window.gambitCurrentGame = () => currentGame;
 window.gambitAuth.init();
 const q = new URLSearchParams(location.search);
 window.gambitNet.autoJoin(q.get('game') === 'checkers' ? 'checkers' : 'chess', q.get('join'));
