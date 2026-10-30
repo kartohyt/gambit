@@ -418,7 +418,6 @@ window.gambitAuth = (() => {
   'use strict';
   const t = (k, v) => window.gambitI18n.t(k, v);
   const $ = id => document.getElementById(id);
-  const ADMIN_NICK = 'itzkartoh';
   const cfg = window.GAMBIT_FIREBASE;
   const available = !!(cfg && window.firebase && !window.claude);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -452,22 +451,14 @@ window.gambitAuth = (() => {
         p = snap.data();
         db.collection('users').doc(u.uid).update({ lastSeen: ts() }).catch(() => {});
       }
-      const an = await db.collection('nicks').doc(ADMIN_NICK).get();
-      a = an.exists && an.data().uid === u.uid;
+      // Only the admin may list players, so a successful read means admin rights
+      a = await db.collection('users').limit(1).get().then(() => true, () => false);
     } catch (e) {}
     if (mine === loadSeq) { profile = p; admin = a; }
   }
 
   async function createProfile(nick) {
     const u = auth.currentUser, lower = nick.toLowerCase();
-    if (lower === ADMIN_NICK) {
-      await u.reload();
-      if (!u.emailVerified) {
-        await u.sendEmailVerification();
-        const e = new Error(); e.code = 'verify'; throw e;
-      }
-      await u.getIdToken(true); // the rules need the fresh "email verified" flag
-    }
     const batch = db.batch();
     batch.set(db.collection('nicks').doc(lower), { uid: u.uid });
     batch.set(db.collection('users').doc(u.uid), { nick, nickLower: lower, createdAt: ts(), lastSeen: ts(), games: 0, banned: false });
@@ -475,7 +466,7 @@ window.gambitAuth = (() => {
     catch (e) {
       if (e.code === 'permission-denied') {
         const taken = await db.collection('nicks').doc(lower).get().catch(() => null);
-        const err = new Error(); err.code = taken && taken.exists ? 'nick-taken' : lower === ADMIN_NICK ? 'nick-reserved' : 'permission-denied';
+        const err = new Error(); err.code = taken && taken.exists ? 'nick-taken' : lower === 'itzkartoh' ? 'nick-reserved' : 'permission-denied';
         throw err;
       }
       throw e;
