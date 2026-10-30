@@ -204,12 +204,55 @@ button.b:disabled { opacity: .45; cursor: default; }
 .online .link { font-family: var(--f-mono); font-size: .75rem; word-break: break-all; color: var(--muted); user-select: all; }
 .online .warn { color: var(--danger); font-size: .88rem; }
 .online .ok { font-weight: 600; }
+.acct { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acct .who { font-weight: 600; font-family: var(--f-mono); font-size: .9rem; }
+.acct .who.banned { color: var(--danger); }
+.modal {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(8, 12, 20, .55);
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.modal-box { width: min(380px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.modal-head h2 { margin: 0; font-family: var(--f-display); font-size: 1.05rem; font-weight: 500; }
+.modal .x { padding: 2px 10px; font-size: 1.1rem; }
+.tabs { display: flex; gap: 4px; }
+.tabs .b[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.auth-form { display: grid; gap: 10px; }
+.auth-form input, .admin input {
+  font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%;
+}
+.auth-form input:focus-visible, .admin input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.auth-form .hint, .admin .hint { color: var(--muted); font-size: .8rem; margin: -4px 0 0; }
+.warn { color: var(--danger); font-size: .88rem; }
+.okmsg { color: var(--fg); font-size: .88rem; background: color-mix(in srgb, var(--accent) 16%, transparent); padding: 8px 10px; border-radius: 6px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; font-size: .85rem; justify-self: start; }
+.admin { max-width: 980px; display: grid; gap: 16px; }
+.admin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.admin-head h2 { margin: 0; font-family: var(--f-display); font-size: 1.3rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.tile .tv { font-family: var(--f-display); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.tile .tk { color: var(--muted); font-size: .8rem; }
+.table-wrap { overflow-x: auto; }
+table.users { width: 100%; border-collapse: collapse; font-size: .88rem; }
+table.users th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 8px; white-space: nowrap; }
+table.users td { padding: 7px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+table.users .nick { font-family: var(--f-mono); font-weight: 600; }
+table.users .num { font-variant-numeric: tabular-nums; text-align: right; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 600; color: #fff; }
+.pill.good { background: #4f9a35; }
+.pill.bad { background: var(--danger); }
+button.b.danger { border-color: var(--danger); color: var(--danger); }
 .rules { margin: 0; font-size: .88rem; color: var(--muted); max-width: 65ch; }
 .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .sq.drop .pc { animation: none; } }
 </style>
-<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>window.GAMBIT_FIREBASE = {"apiKey": "AIzaSyCyODEBZR-fRX14D-j5drc5V_Z1-ZUKcc8", "authDomain": "gambit-kartoh.firebaseapp.com", "projectId": "gambit-kartoh", "storageBucket": "gambit-kartoh.firebasestorage.app", "messagingSenderId": "176442425333", "appId": "1:176442425333:web:9e3ebe5ddae4b769af6abc"};</script>
 </head>
 <body>
 <div class="wrap">
@@ -220,6 +263,7 @@ button.b:disabled { opacity: .45; cursor: default; }
       <button class="b" data-game="checkers" data-t="gCheckers">Шашки</button>
     </nav>
     <div class="tag" data-t="tag">Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки</div>
+    <div class="acct" id="acct" hidden></div>
     <div class="lang" role="group" aria-label="Язык / Language">
       <button class="b" id="langRu" data-lang="ru">RU</button>
       <button class="b" id="langEn" data-lang="en">EN</button>
@@ -292,6 +336,22 @@ button.b:disabled { opacity: .45; cursor: default; }
     </aside>
   </div>
 
+  <section class="admin" id="adminApp" hidden>
+    <div class="admin-head">
+      <h2 data-t="adTitle">Админ-панель</h2>
+      <div class="btns">
+        <button class="b" id="adminRefresh" data-t="adRefresh">Обновить</button>
+        <button class="b primary" id="adminBack" data-t="adBack">К игре</button>
+      </div>
+    </div>
+    <div class="stats" id="adminStats"></div>
+    <div class="card">
+      <div class="sheet-h"><h2 data-t="adPlayersH">Игроки</h2></div>
+      <label class="field" for="adminSearch"><span data-t="adSearch">Поиск по нику</span><input id="adminSearch" type="search" autocomplete="off"></label>
+      <div class="table-wrap"><table class="users" id="adminUsers"></table></div>
+    </div>
+  </section>
+
   <div class="main" id="checkersApp" hidden>
     <div class="board-wrap">
       <div class="frame"><div class="board" id="ckBoard" role="grid" data-ta="ckBoardLbl" aria-label="Доска для шашек"></div></div>
@@ -347,21 +407,288 @@ button.b:disabled { opacity: .45; cursor: default; }
   </div>
 </div>
 
+<div class="modal" id="authModal" hidden>
+  <div class="modal-box" id="authBox" role="dialog" aria-modal="true" aria-labelledby="authTitle"></div>
+</div>
+
 <script>
-// ---------- Online play: both players exchange the game through free public MQTT servers ----------
-// Every message carries the whole game (round, moves, resignation), so a message lost on the way
-// is repaired by the next one; both players re-send it every few seconds as a heartbeat.
+// ---------- Accounts and the admin panel (Firebase Auth + Firestore) ----------
+// The page only shows what the Firestore rules allow; bans and admin rights are enforced there.
+window.gambitAuth = (() => {
+  'use strict';
+  const t = (k, v) => window.gambitI18n.t(k, v);
+  const $ = id => document.getElementById(id);
+  const ADMIN_NICK = 'itzkartoh';
+  const cfg = window.GAMBIT_FIREBASE;
+  const available = !!(cfg && window.firebase && !window.claude);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let auth = null, db = null, user = null, profile = null, admin = false, ready = false;
+  const readyWaiters = [], changeListeners = [];
+  let afterLogin = null;
+
+  const ts = () => window.firebase.firestore.FieldValue.serverTimestamp();
+  const emit = () => { for (const f of changeListeners) f(); };
+
+  function errText(e) {
+    const code = (e && e.code) || '';
+    const map = {
+      'auth/email-already-in-use': 'aeEmailUsed', 'auth/invalid-email': 'aeEmailBad', 'auth/weak-password': 'aeWeak',
+      'auth/invalid-credential': 'aeWrong', 'auth/wrong-password': 'aeWrong', 'auth/user-not-found': 'aeWrong',
+      'auth/invalid-login-credentials': 'aeWrong', 'auth/too-many-requests': 'aeTooMany', 'auth/network-request-failed': 'aeNetwork',
+      'auth/missing-password': 'aeWeak', 'nick-taken': 'aeNickTaken', 'nick-bad': 'aeNickBad', 'nick-reserved': 'aeNickReserved',
+      'permission-denied': 'aeDenied', 'unavailable': 'aeNetwork'
+    };
+    return map[code] ? t(map[code]) : t('aeOther', { e: code || (e && e.message) || String(e) });
+  }
+
+  // Sign-up loads the profile twice at once (sign-in event and profile creation): only the latest load counts
+  let loadSeq = 0;
+  async function loadProfile(u) {
+    const mine = ++loadSeq;
+    let p = null, a = false;
+    try {
+      const snap = await db.collection('users').doc(u.uid).get();
+      if (snap.exists) {
+        p = snap.data();
+        db.collection('users').doc(u.uid).update({ lastSeen: ts() }).catch(() => {});
+      }
+      const an = await db.collection('nicks').doc(ADMIN_NICK).get();
+      a = an.exists && an.data().uid === u.uid;
+    } catch (e) {}
+    if (mine === loadSeq) { profile = p; admin = a; }
+  }
+
+  async function createProfile(nick) {
+    const u = auth.currentUser, lower = nick.toLowerCase();
+    if (lower === ADMIN_NICK) {
+      await u.reload();
+      if (!u.emailVerified) {
+        await u.sendEmailVerification();
+        const e = new Error(); e.code = 'verify'; throw e;
+      }
+      await u.getIdToken(true); // the rules need the fresh "email verified" flag
+    }
+    const batch = db.batch();
+    batch.set(db.collection('nicks').doc(lower), { uid: u.uid });
+    batch.set(db.collection('users').doc(u.uid), { nick, nickLower: lower, createdAt: ts(), lastSeen: ts(), games: 0, banned: false });
+    try { await batch.commit(); }
+    catch (e) {
+      if (e.code === 'permission-denied') {
+        const taken = await db.collection('nicks').doc(lower).get().catch(() => null);
+        const err = new Error(); err.code = taken && taken.exists ? 'nick-taken' : lower === ADMIN_NICK ? 'nick-reserved' : 'permission-denied';
+        throw err;
+      }
+      throw e;
+    }
+    await loadProfile(u);
+  }
+
+  function checkNick(nick) {
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(nick)) { const e = new Error(); e.code = 'nick-bad'; throw e; }
+  }
+
+  // ---------- Header ----------
+  function renderAcct() {
+    const el = $('acct');
+    if (!available) { el.hidden = true; return; }
+    el.hidden = false;
+    if (!ready) { el.innerHTML = ''; return; }
+    if (!user) { el.innerHTML = `<button class="b" data-a="login">${t('acLogin')}</button>`; return; }
+    const name = profile ? esc(profile.nick) : esc(user.email);
+    el.innerHTML = `<span class="who${profile && profile.banned ? ' banned' : ''}" title="${esc(user.email)}">${name}${profile && profile.banned ? ' · ' + t('acBanned') : ''}</span>`
+      + (!profile ? `<button class="b primary" data-a="finish">${t('acFinish')}</button>` : '')
+      + (admin ? `<button class="b" data-a="admin">${t('acAdmin')}</button>` : '')
+      + `<button class="b" data-a="logout">${t('acLogout')}</button>`;
+  }
+
+  // ---------- Sign-in dialog ----------
+  let mode = 'login', msg = '', msgOk = false, busy = false;
+  function openModal(m) { mode = m || (user && !profile ? 'nick' : 'login'); msg = ''; drawModal(); $('authModal').hidden = false; setTimeout(() => { const f = $('authModal').querySelector('input'); if (f) f.focus(); }, 30); }
+  function closeModal() { $('authModal').hidden = true; }
+  function drawModal() {
+    const box = $('authBox');
+    const tabs = mode === 'nick' ? '' : `<div class="tabs" role="tablist">
+        <button class="b" role="tab" data-m="login" aria-selected="${mode === 'login'}">${t('acLogin')}</button>
+        <button class="b" role="tab" data-m="register" aria-selected="${mode === 'register'}">${t('acRegister')}</button></div>`;
+    const f = (id, type, label, ac, extra = '') => `<label class="field" for="${id}">${label}<input id="${id}" type="${type}" autocomplete="${ac}" ${extra}></label>`;
+    let body = '';
+    if (mode === 'login') body = f('auEmail', 'email', t('acEmail'), 'email') + f('auPass', 'password', t('acPass'), 'current-password');
+    else if (mode === 'register') body = f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`
+      + f('auEmail', 'email', t('acEmail'), 'email') + f('auPass', 'password', t('acPass'), 'new-password') + `<div class="hint">${t('acPassHint')}</div>`;
+    else body = `<p class="hint">${t('acNickStep')}</p>` + f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`;
+    const label = mode === 'login' ? t('acLogin') : mode === 'register' ? t('acCreate') : t('acSave');
+    box.innerHTML = `<div class="modal-head"><h2 id="authTitle">${mode === 'nick' ? t('acFinish') : t('acTitle')}</h2>
+        <button class="b x" data-a="close" aria-label="${t('cancel')}">×</button></div>${tabs}
+      <form id="authForm" class="auth-form">${body}
+        ${msg ? `<div class="${msgOk ? 'okmsg' : 'warn'}" role="alert">${esc(msg)}</div>` : ''}
+        <button class="b primary" ${busy ? 'disabled' : ''}>${busy ? '…' : label}</button>
+        ${mode === 'login' ? `<button type="button" class="linkbtn" data-a="reset">${t('acForgot')}</button>` : ''}
+      </form>`;
+  }
+  async function submit() {
+    // Read the form before redrawing it: the redraw replaces the inputs
+    const v = id => ($(id) ? $(id).value.trim() : '');
+    const nick = v('auNick'), email = v('auEmail'), pass = $('auPass') ? $('auPass').value : '';
+    busy = true; msg = ''; drawModal();
+    const keep = () => { if ($('auNick')) $('auNick').value = nick; if ($('auEmail')) $('auEmail').value = email; };
+    keep();
+    try {
+      if (mode === 'login') {
+        await auth.signInWithEmailAndPassword(email, pass);
+      } else if (mode === 'register') {
+        checkNick(nick);
+        const taken = await db.collection('nicks').doc(nick.toLowerCase()).get();
+        if (taken.exists) { const e = new Error(); e.code = 'nick-taken'; throw e; }
+        pendingNick = nick;
+        await auth.createUserWithEmailAndPassword(email, pass);
+        await createProfile(nick);
+      } else {
+        checkNick(nick);
+        await createProfile(nick);
+      }
+      busy = false;
+      if (!profile) { mode = 'nick'; drawModal(); return; }
+      closeModal(); renderAcct(); emit();
+      const next = afterLogin; afterLogin = null;
+      if (next && !profile.banned) next();
+    } catch (e) {
+      busy = false;
+      if (e.code === 'verify') { msg = t('acVerify', { e: auth.currentUser.email }); msgOk = true; mode = 'nick'; }
+      else { msg = errText(e); msgOk = false; if (auth.currentUser && mode === 'register') mode = 'nick'; }
+      drawModal();
+      keep();
+      if (mode === 'nick' && pendingNick && $('auNick')) $('auNick').value = pendingNick;
+    }
+  }
+  let pendingNick = '';
+
+  // ---------- Admin panel ----------
+  let users = [], adminQuery = '';
+  const fmtDate = d => (d && d.toDate ? d.toDate().toLocaleString(document.documentElement.lang === 'en' ? 'en-GB' : 'ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+  async function openAdmin() {
+    if (!admin) return;
+    $('chessApp').hidden = true; $('checkersApp').hidden = true; $('adminApp').hidden = false;
+    await loadAdmin();
+  }
+  async function loadAdmin() {
+    $('adminStats').innerHTML = `<div class="hint">${t('adLoading')}</div>`;
+    try {
+      const day = new Date(); day.setHours(0, 0, 0, 0);
+      const week = new Date(Date.now() - 7 * 864e5), month = new Date(Date.now() - 30 * 864e5);
+      const [us, gs] = await Promise.all([
+        db.collection('users').orderBy('createdAt', 'desc').limit(1000).get(),
+        db.collection('games').where('createdAt', '>=', month).get()
+      ]);
+      users = us.docs.map(d => ({ id: d.id, ...d.data() }));
+      const games = gs.docs.map(d => d.data()).filter(g => g.createdAt && g.createdAt.toDate);
+      const since = d => games.filter(g => g.createdAt.toDate() >= d).length;
+      const online = users.filter(u => u.lastSeen && u.lastSeen.toDate && Date.now() - u.lastSeen.toDate() < 864e5).length;
+      const tiles = [
+        [t('adPlayers'), users.length], [t('adActive'), online], [t('adBannedN'), users.filter(u => u.banned).length],
+        [t('adToday'), since(day)], [t('adWeek'), since(week)], [t('adMonth'), games.length],
+        [t('gChess'), games.filter(g => g.game === 'chess').length], [t('gCheckers'), games.filter(g => g.game === 'checkers').length]
+      ];
+      $('adminStats').innerHTML = tiles.map(([k, v]) => `<div class="tile"><div class="tv">${v}</div><div class="tk">${esc(k)}</div></div>`).join('');
+      drawUsers();
+    } catch (e) {
+      $('adminStats').innerHTML = `<div class="warn">${esc(errText(e))}</div>`;
+    }
+  }
+  function drawUsers() {
+    const q = adminQuery.toLowerCase();
+    const rows = users.filter(u => !q || (u.nickLower || '').includes(q));
+    $('adminUsers').innerHTML = `<thead><tr><th>${t('acNick')}</th><th>${t('adJoined')}</th><th>${t('adSeen')}</th><th>${t('adGames')}</th><th>${t('adStatus')}</th><th></th></tr></thead><tbody>`
+      + (rows.length ? rows.map(u => `<tr>
+          <td class="nick">${esc(u.nick)}</td><td>${fmtDate(u.createdAt)}</td><td>${fmtDate(u.lastSeen)}</td><td class="num">${u.games || 0}</td>
+          <td>${u.banned ? `<span class="pill bad">${t('adBannedOne')}</span>` : `<span class="pill good">${t('adActiveOne')}</span>`}</td>
+          <td>${u.id === user.uid ? `<span class="hint">${t('adYou')}</span>` : `<button class="b${u.banned ? '' : ' danger'}" data-ban="${u.id}" data-to="${!u.banned}">${u.banned ? t('adUnban') : t('adBan')}</button>`}</td>
+        </tr>`).join('') : `<tr><td colspan="6" class="hint">${t('adNone')}</td></tr>`) + '</tbody>';
+  }
+  async function setBan(id, to, btn) {
+    btn.disabled = true;
+    try {
+      await db.collection('users').doc(id).update({ banned: to });
+      const u = users.find(x => x.id === id); if (u) u.banned = to;
+      drawUsers();
+    } catch (e) { btn.disabled = false; btn.textContent = errText(e); }
+  }
+
+  // ---------- Wiring ----------
+  function init() {
+    renderAcct();
+    if (!available) return;
+    window.firebase.initializeApp(cfg);
+    auth = window.firebase.auth();
+    db = window.firebase.firestore();
+    // Local testing against the Firebase emulators: http://localhost:<port>/?emu
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).has('emu')) {
+      auth.useEmulator('http://127.0.0.1:9099');
+      db.useEmulator('127.0.0.1', 8085);
+    }
+    auth.onAuthStateChanged(async u => {
+      user = u;
+      if (u) await loadProfile(u); else { profile = null; admin = false; }
+      ready = true;
+      renderAcct(); emit();
+      while (readyWaiters.length) readyWaiters.shift()();
+      if (u && !profile && $('authModal').hidden) openModal('nick');
+    });
+    $('acct').addEventListener('click', e => {
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      const a = b.dataset.a;
+      if (a === 'login') openModal('login');
+      else if (a === 'finish') openModal('nick');
+      else if (a === 'logout') { auth.signOut(); $('adminApp').hidden = true; window.gambitSetGame && window.gambitSetGame(); }
+      else if (a === 'admin') openAdmin();
+    });
+    $('authModal').addEventListener('click', e => {
+      if (e.target === $('authModal')) { closeModal(); return; }
+      const m = e.target.closest('[data-m]');
+      if (m) { mode = m.dataset.m; msg = ''; drawModal(); return; }
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      if (b.dataset.a === 'close') closeModal();
+      else if (b.dataset.a === 'reset') {
+        const email = $('auEmail').value.trim();
+        if (!email) { msg = t('aeEmailBad'); msgOk = false; drawModal(); return; }
+        auth.sendPasswordResetEmail(email).then(() => { msg = t('acResetSent'); msgOk = true; drawModal(); }, err => { msg = errText(err); msgOk = false; drawModal(); });
+      }
+    });
+    $('authModal').addEventListener('submit', e => { e.preventDefault(); if (!busy) submit(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('authModal').hidden) closeModal(); });
+    $('adminBack').addEventListener('click', () => { $('adminApp').hidden = true; window.gambitSetGame && window.gambitSetGame(); });
+    $('adminRefresh').addEventListener('click', loadAdmin);
+    $('adminSearch').addEventListener('input', e => { adminQuery = e.target.value.trim(); drawUsers(); });
+    $('adminUsers').addEventListener('click', e => { const b = e.target.closest('[data-ban]'); if (b) setBan(b.dataset.ban, b.dataset.to === 'true', b); });
+    document.addEventListener('gambit-lang', () => { renderAcct(); if (!$('authModal').hidden) drawModal(); if (!$('adminApp').hidden) loadAdmin(); });
+  }
+
+  return {
+    available, init, errText,
+    db: () => db,
+    onReady: f => (ready ? f() : readyWaiters.push(f)),
+    onChange: f => changeListeners.push(f),
+    user: () => user, profile: () => profile,
+    canPlay: () => !!(user && profile && !profile.banned),
+    banned: () => !!(profile && profile.banned),
+    // Ask the player to sign in, then carry on with what they were doing
+    prompt: next => { afterLogin = next || null; openModal(user ? 'nick' : 'login'); },
+    ts
+  };
+})();
+</script>
+
+<script>
+// ---------- Online play: one Firestore document per game ----------
+// The document holds the whole game (round, moves, resignation); both players listen to it live.
+// The Firestore rules let only signed-in, unbanned players create, join and move.
 window.gambitNet = (() => {
   'use strict';
   const t = (k, v) => window.gambitI18n.t(k, v);
-  // Inside a claude.ai artifact network sockets are blocked, so online play exists only on the published site
-  const available = typeof window.mqtt === 'object' && !window.claude;
-  const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
-  const BEAT = 4000, LOST_AFTER = 15000, JOIN_TIMEOUT = 30000, CONNECT_TIMEOUT = 15000;
+  const A = window.gambitAuth;
+  const available = !!(A && A.available);
   const hooks = {};
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const rid = n => Array.from({ length: n }, () => 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('');
-  const pageNonce = rid(4); // keeps message ids unique when a reloaded page reuses its player id
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const clean = raw => String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
   function makeCode() {
     const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -370,131 +697,93 @@ window.gambitNet = (() => {
     return s;
   }
 
-  // One online session per game. cb.getState()/cb.applyState(st) move the game between the two players.
   function create(game, box, cb) {
-    // The same id survives a reload of this tab, so a player who refreshes gets their seat back
-    let myId = '';
-    try { myId = sessionStorage.getItem('gambit-net-' + game) || ''; } catch (e) {}
-    if (!/^[a-z0-9]{10}$/.test(myId)) {
-      myId = rid(10);
-      try { sessionStorage.setItem('gambit-net-' + game, myId); } catch (e) {}
-    }
-    let clients = [], state = 'idle', code = '', side = 'w', myColor = null, opp = null, err = '', copied = false;
-    let seq = 0, seen = new Set(), lastSeen = 0, beat = null, joinTimer = null, failTimer = null;
+    let state = 'idle', code = '', myColor = null, oppNick = '', err = '', copied = false, unsub = null, ref = null;
+    const roomKey = 'gambit-room-' + game;
 
-    const topic = () => 'gambit/v1/' + game + '/' + code;
-    function stopTimers() {
-      clearInterval(beat); clearInterval(joinTimer); clearTimeout(failTimer);
-      beat = joinTimer = failTimer = null;
-    }
-    function close() {
-      stopTimers();
-      for (const c of clients) { try { c.end(true); } catch (e) {} }
-      clients = []; opp = null;
-    }
+    function stop() { if (unsub) unsub(); unsub = null; }
     function setState(s) { state = s; draw(); cb.change(); }
-    function fail(message) { err = message; close(); setState('error'); }
+    function forget() { try { sessionStorage.removeItem(roomKey); } catch (e) {} }
+    function remember() { try { sessionStorage.setItem(roomKey, code); } catch (e) {} }
+    function fail(message) { err = message; stop(); forget(); setState('error'); }
 
-    function publish(msg) {
-      const data = JSON.stringify({ ...msg, from: myId, mid: myId + '-' + pageNonce + '-' + (++seq) });
-      for (const c of clients) if (c.connected) c.publish(topic(), data, { qos: 1 });
+    // Count the game once per player, even if the page is reloaded mid-game
+    function countGame() {
+      const key = 'gambit-counted-' + code;
+      try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {}
+      A.db().collection('users').doc(A.user().uid)
+        .update({ games: window.firebase.firestore.FieldValue.increment(1), lastSeen: A.ts() }).catch(() => {});
     }
-    function pushState() { if (opp) publish({ t: 'state', to: opp, st: cb.getState() }); }
 
-    // Connect to every broker at once and use whichever answers; messages are de-duplicated by id
-    function connectAll(onReady) {
-      close();
-      let ready = false;
-      for (const url of BROKERS) {
-        let c;
-        try { c = window.mqtt.connect(url, { clientId: 'gambit_' + myId + '_' + rid(4), clean: true, connectTimeout: 10000, reconnectPeriod: 2000, keepalive: 30 }); }
-        catch (e) { continue; }
-        clients.push(c);
-        c.on('connect', () => {
-          c.subscribe(topic(), { qos: 1 }, e => {
-            if (e) return;
-            if (!ready) { ready = true; clearTimeout(failTimer); onReady(); }
-            else pushState();
+    function watch() {
+      stop();
+      unsub = ref.onSnapshot(snap => {
+        if (!snap.exists) { fail(t('onNoGame', { c: code })); return; }
+        const g = snap.data(), me = A.user() && A.user().uid;
+        const amHost = g.host === me;
+        if (!g.guest) { if (amHost && state !== 'waiting') setState('waiting'); return; }
+        myColor = amHost ? g.hostColor : g.hostColor === 'w' ? 'b' : 'w';
+        oppNick = amHost ? g.guestNick : g.hostNick;
+        if (state !== 'connected') { setState('connected'); cb.start(myColor); countGame(); }
+        cb.applyState({ round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null });
+      }, e => fail(A.errText(e)));
+    }
+
+    async function host(side) {
+      if (!A.canPlay()) { A.prompt(() => host(side)); return; }
+      setState('opening');
+      const db = A.db(), me = A.user().uid, nick = A.profile().nick;
+      for (let i = 0; i < 4; i++) {
+        code = makeCode();
+        ref = db.collection('games').doc(code);
+        try {
+          await ref.set({
+            game, host: me, hostNick: nick, hostColor: side === 'b' ? 'b' : 'w', guest: null, guestNick: null,
+            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts()
           });
-        });
-        c.on('message', (tp, buf) => receive(buf));
-        c.on('error', () => {});
-      }
-      failTimer = setTimeout(() => { if (!ready) fail(t('onServer')); }, CONNECT_TIMEOUT);
-    }
-
-    function startBeat() {
-      clearInterval(beat);
-      lastSeen = Date.now();
-      beat = setInterval(() => {
-        pushState();
-        if (state === 'connected' && Date.now() - lastSeen > LOST_AFTER) setState('lost');
-      }, BEAT);
-    }
-
-    function receive(buf) {
-      let msg;
-      try { msg = JSON.parse(String(buf)); } catch (e) { return; }
-      if (!msg || typeof msg !== 'object' || msg.from === myId || seen.has(msg.mid)) return;
-      seen.add(msg.mid);
-      if (seen.size > 500) seen = new Set([...seen].slice(-200));
-
-      const oppQuiet = state === 'connected' && Date.now() - lastSeen > 2 * BEAT;
-      if (msg.t === 'join' && (state === 'waiting' || state === 'lost' || msg.from === opp || oppQuiet)) {
-        // The first player to knock gets the seat; a friend who reloaded the page can take it back
-        // and receives the game so far. Anyone else with the code is ignored.
-        const fresh = state === 'waiting';
-        opp = msg.from; myColor = side;
-        publish({ t: 'hello', to: opp, youAre: side === 'w' ? 'b' : 'w' });
-        if (fresh) { setState('connected'); cb.start(myColor); startBeat(); }
-        else { lastSeen = Date.now(); if (state === 'lost') setState('connected'); }
-        pushState();
-      } else if (msg.t === 'hello' && msg.to === myId && state === 'connecting') {
-        opp = msg.from; myColor = msg.youAre === 'b' ? 'b' : 'w';
-        clearInterval(joinTimer);
-        setState('connected'); cb.start(myColor); startBeat();
-      } else if (opp && msg.from === opp && msg.to === myId) {
-        lastSeen = Date.now();
-        if (state === 'lost') setState('connected');
-        if (msg.t === 'state' && msg.st) cb.applyState(msg.st);
-        else if (msg.t === 'bye') setState('lost');
+          copied = false; remember(); watch();
+          return;
+        } catch (e) {
+          // A taken code looks like "permission denied": try another one
+          if (e.code !== 'permission-denied' || i === 3) { fail(A.errText(e)); return; }
+        }
       }
     }
 
-    function host(s) {
-      side = s; code = makeCode(); copied = false; setState('opening');
-      connectAll(() => setState('waiting'));
-    }
-    function join(raw) {
-      const c1 = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    async function join(raw) {
+      const c1 = clean(raw);
       if (!c1) return;
+      if (!A.canPlay()) { A.prompt(() => join(c1)); return; }
       code = c1; setState('connecting');
-      connectAll(() => {
-        const started = Date.now();
-        // Knock until the host answers: its server may need a moment to pass the message along
-        const knock = () => {
-          if (state !== 'connecting') return;
-          if (Date.now() - started > JOIN_TIMEOUT) { fail(t('onNoGame', { c: code })); return; }
-          publish({ t: 'join' });
-        };
-        knock();
-        joinTimer = setInterval(knock, 2000);
-      });
+      ref = A.db().collection('games').doc(code);
+      try {
+        const snap = await ref.get();
+        if (!snap.exists) { fail(t('onNoGame', { c: code })); return; }
+        const g = snap.data(), me = A.user().uid;
+        if (g.game !== game) { fail(t('onWrongGame')); return; }
+        if (g.host !== me && g.guest && g.guest !== me) { fail(t('onFull')); return; }
+        if (g.host !== me && !g.guest) await ref.update({ guest: me, guestNick: A.profile().nick, updatedAt: A.ts() });
+        remember(); watch();
+      } catch (e) { fail(A.errText(e)); }
     }
-    function leave() {
-      if (opp) publish({ t: 'bye', to: opp });
-      const old = clients;
-      clients = [];
-      setTimeout(() => { for (const c of old) { try { c.end(true); } catch (e) {} } }, 300);
-      stopTimers(); opp = null; myColor = null; setState('idle');
+
+    function leave() { stop(); forget(); myColor = null; setState('idle'); }
+
+    function push() {
+      if (state !== 'connected' || !ref) return;
+      ref.update({ ...cb.getState(), updatedAt: A.ts() }).catch(e => { err = A.errText(e); draw(); });
     }
 
     function draw() {
       const link = location.origin + location.pathname + '?game=' + game + '&join=' + code;
       const joinForm = `<div class="muted">${t('onOr')}</div>
-        <form class="row" data-act="join"><input id="${game}-code" maxlength="8" autocomplete="off" placeholder="${t('onCodePh')}" aria-label="${t('onCodePh')}"><button class="b">${t('onJoin')}</button></form>`;
+        <form class="row" data-act="join"><input id="${game}-code" maxlength="5" autocomplete="off" placeholder="${t('onCodePh')}" aria-label="${t('onCodePh')}"><button class="b">${t('onJoin')}</button></form>`;
       let h = '';
-      if (state === 'idle' || state === 'error') {
+      if (!A.user() || !A.profile()) {
+        h = `<div class="muted">${t('onNeedLogin')}</div><div class="row"><button class="b primary" data-act="login">${t('acLogin')}</button></div>`;
+      } else if (A.banned()) {
+        h = `<div class="warn">${t('onBanned')}</div>`;
+      } else if (state === 'idle' || state === 'error') {
         if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
         h += `<div class="row"><button class="b primary" data-act="host">${t('onCreate')}</button></div>` + joinForm;
       } else if (state === 'opening' || state === 'connecting') {
@@ -506,10 +795,11 @@ window.gambitNet = (() => {
           <div class="row"><button class="b primary" data-act="copy" data-link="${esc(link)}">${copied ? t('onCopied') : t('onCopy')}</button>
           <button class="b" data-act="leave">${t('cancel')}</button></div>
           <div class="muted">${t('onWaiting')}</div>`;
-      } else if (state === 'connected' || state === 'lost') {
-        h += state === 'lost' ? `<div class="warn">${t('onLost')}</div>`
-          : `<div class="ok">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>`;
-        h += `<div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
+      } else if (state === 'connected') {
+        h += `<div class="ok">${esc(t('onVs', { n: oppNick || '?' }))}</div>
+          <div class="muted">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
+          ${err ? `<div class="warn">${esc(err)}</div>` : ''}
+          <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
       }
       box.innerHTML = h;
     }
@@ -520,6 +810,7 @@ window.gambitNet = (() => {
       const act = b.dataset.act;
       if (act === 'host') host(cb.side());
       else if (act === 'leave') leave();
+      else if (act === 'login') A.prompt();
       else if (act === 'copy') {
         const done = () => { copied = true; draw(); };
         try { navigator.clipboard.writeText(b.dataset.link).then(done, () => {}); } catch (e2) {}
@@ -529,29 +820,39 @@ window.gambitNet = (() => {
       e.preventDefault();
       join(box.querySelector('input').value);
     });
-    window.addEventListener('pagehide', () => { if (opp) publish({ t: 'bye', to: opp }); });
     document.addEventListener('gambit-lang', draw);
+    if (A) A.onChange(() => { if (A.banned() && state !== 'idle') leave(); else draw(); });
     draw();
 
     const session = {
-      join, leave, draw, push: pushState,
+      join, leave, draw, push,
       color: () => (state === 'connected' ? myColor : null),
       active: () => state === 'connected',
-      waiting: () => state === 'waiting'
+      waiting: () => state === 'waiting',
+      saved: () => { try { return sessionStorage.getItem(roomKey) || ''; } catch (e) { return ''; } }
     };
     hooks[game] = { session, enter: cb.enter };
     return session;
   }
 
-  // Opening a shared link (?game=chess&join=CODE) joins that game straight away
-  function joinFromLink(game, code) {
-    const h = hooks[game];
-    if (!h || !available) return;
-    h.enter();
-    h.session.join(code);
+  // After sign-in is known: open a shared link (?game=chess&join=CODE), or return to the game
+  // this tab was playing before a reload
+  function autoJoin(linkGame, linkCode) {
+    if (!available) return;
+    A.onReady(() => {
+      if (linkCode && hooks[linkGame]) {
+        hooks[linkGame].enter(true);
+        hooks[linkGame].session.join(linkCode);
+        return;
+      }
+      for (const g of Object.keys(hooks)) {
+        const saved = hooks[g].session.saved();
+        if (saved && A.canPlay()) { hooks[g].enter(false); hooks[g].session.join(saved); }
+      }
+    });
   }
 
-  return { available, create, joinFromLink };
+  return { available, create, autoJoin };
 })();
 </script>
 
@@ -578,10 +879,27 @@ const I18N = {
     prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
+    acLogin: 'Войти', acRegister: 'Регистрация', acTitle: 'Аккаунт', acCreate: 'Создать аккаунт', acSave: 'Сохранить',
+    acLogout: 'Выйти', acAdmin: 'Админка', acFinish: 'Завершить регистрацию', acBanned: 'заблокирован',
+    acNick: 'Ник', acEmail: 'Почта', acPass: 'Пароль', acForgot: 'Забыли пароль?',
+    acNickHint: '3–16 символов: латиница, цифры и _', acPassHint: 'Не меньше 6 символов',
+    acNickStep: 'Осталось выбрать ник: его увидят соперники.',
+    acVerify: 'Этот ник закреплён за администратором. Мы отправили письмо на {e}: перейдите по ссылке из письма и нажмите «Сохранить».',
+    acResetSent: 'Письмо для сброса пароля отправлено.',
+    aeEmailUsed: 'На эту почту уже есть аккаунт. Войдите.', aeEmailBad: 'Проверьте адрес почты.', aeWeak: 'Пароль должен быть не короче 6 символов.',
+    aeWrong: 'Неверная почта или пароль.', aeTooMany: 'Слишком много попыток. Подождите немного.', aeNetwork: 'Нет связи с сервером. Проверьте интернет.',
+    aeNickTaken: 'Этот ник уже занят.', aeNickBad: 'Ник: 3–16 символов, латиница, цифры и _.', aeNickReserved: 'Этот ник занять нельзя.',
+    aeDenied: 'Нет доступа. Возможно, аккаунт заблокирован.', aeOther: 'Ошибка: {e}',
+    onNeedLogin: 'Чтобы играть онлайн, войдите или зарегистрируйтесь.', onBanned: 'Ваш аккаунт заблокирован: онлайн-игра недоступна.',
+    onVs: 'Соперник: {n}', onWrongGame: 'этот код от другой игры', onFull: 'в этой игре уже двое игроков',
+    adTitle: 'Админ-панель', adRefresh: 'Обновить', adBack: 'К игре', adPlayersH: 'Игроки', adSearch: 'Поиск по нику', adLoading: 'Загрузка…',
+    adPlayers: 'Игроков всего', adActive: 'Заходили за сутки', adBannedN: 'Заблокировано', adToday: 'Партий сегодня', adWeek: 'Партий за неделю', adMonth: 'Партий за 30 дней',
+    adJoined: 'Регистрация', adSeen: 'Был в сети', adGames: 'Партий', adStatus: 'Статус', adBannedOne: 'бан', adActiveOne: 'активен',
+    adBan: 'Забанить', adUnban: 'Разбанить', adYou: 'это вы', adNone: 'Никого не найдено',
     online: 'Онлайн с другом', onCreate: 'Создать игру', onJoin: 'Войти', onCodePh: 'Код игры', onOr: 'или войдите по коду друга',
     onOpening: 'Подключение…', onConnecting: 'Ищем игру {c}…', onCode: 'Код игры', onCopy: 'Скопировать ссылку', onCopied: 'Ссылка скопирована',
-    onWaiting: 'Отправьте другу код или ссылку и ждите: игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
-    onLost: 'Соперник пропал со связи. Ждём, пока он вернётся…', onError: 'Не удалось подключиться: {e}', onNoGame: 'игра {c} не найдена. Проверьте код: друг должен держать страницу с игрой открытой',
+    onWaiting: 'Отправьте другу код или ссылку. Друг тоже должен войти в аккаунт; игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
+    onLost: 'Соперник пропал со связи. Ждём, пока он вернётся…', onError: 'Не удалось подключиться: {e}', onNoGame: 'игры с кодом {c} нет. Проверьте код',
     onServer: 'сервер связи не отвечает. Проверьте интернет, выключите VPN или блокировщик рекламы и попробуйте ещё раз',
     onLeave: 'Выйти из игры', onIdle: 'Создайте игру или войдите по коду', onWait: 'Ждём соперника…', onYour: ' · ваш ход', onTheirs: ' · ход соперника',
     ckTag: 'Русские шашки: бить обязательно, простые бьют и назад, дамка ходит на любое число полей',
@@ -608,10 +926,27 @@ const I18N = {
     prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
+    acLogin: 'Sign in', acRegister: 'Sign up', acTitle: 'Account', acCreate: 'Create account', acSave: 'Save',
+    acLogout: 'Sign out', acAdmin: 'Admin', acFinish: 'Finish sign-up', acBanned: 'banned',
+    acNick: 'Nickname', acEmail: 'E-mail', acPass: 'Password', acForgot: 'Forgot your password?',
+    acNickHint: '3–16 characters: Latin letters, digits and _', acPassHint: 'At least 6 characters',
+    acNickStep: 'One more step: pick a nickname your opponents will see.',
+    acVerify: 'This nickname is reserved for the admin. We sent an e-mail to {e}: open the link in it, then press Save.',
+    acResetSent: 'A password reset e-mail is on its way.',
+    aeEmailUsed: 'This e-mail already has an account. Sign in instead.', aeEmailBad: 'Check the e-mail address.', aeWeak: 'The password needs at least 6 characters.',
+    aeWrong: 'Wrong e-mail or password.', aeTooMany: 'Too many attempts. Please wait a little.', aeNetwork: 'Cannot reach the server. Check your internet.',
+    aeNickTaken: 'This nickname is taken.', aeNickBad: 'Nickname: 3–16 characters, Latin letters, digits and _.', aeNickReserved: 'This nickname cannot be taken.',
+    aeDenied: 'Access denied. The account may be banned.', aeOther: 'Error: {e}',
+    onNeedLogin: 'Sign in or sign up to play online.', onBanned: 'Your account is banned: online play is unavailable.',
+    onVs: 'Opponent: {n}', onWrongGame: 'this code belongs to the other game', onFull: 'this game already has two players',
+    adTitle: 'Admin panel', adRefresh: 'Refresh', adBack: 'Back to the game', adPlayersH: 'Players', adSearch: 'Search by nickname', adLoading: 'Loading…',
+    adPlayers: 'Players', adActive: 'Seen in the last 24 h', adBannedN: 'Banned', adToday: 'Games today', adWeek: 'Games this week', adMonth: 'Games in 30 days',
+    adJoined: 'Signed up', adSeen: 'Last seen', adGames: 'Games', adStatus: 'Status', adBannedOne: 'banned', adActiveOne: 'active',
+    adBan: 'Ban', adUnban: 'Unban', adYou: 'you', adNone: 'Nobody found',
     online: 'Online with a friend', onCreate: 'Create game', onJoin: 'Join', onCodePh: 'Game code', onOr: "or join with your friend's code",
     onOpening: 'Connecting…', onConnecting: 'Looking for game {c}…', onCode: 'Game code', onCopy: 'Copy link', onCopied: 'Link copied',
-    onWaiting: 'Send your friend the code or link and wait: the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
-    onLost: 'Your opponent lost the connection. Waiting for them to come back…', onError: 'Could not connect: {e}', onNoGame: 'game {c} was not found. Check the code: your friend must keep the game page open',
+    onWaiting: 'Send your friend the code or link. They need to sign in too; the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
+    onLost: 'Your opponent lost the connection. Waiting for them to come back…', onError: 'Could not connect: {e}', onNoGame: 'there is no game with the code {c}. Check the code',
     onServer: 'the connection server is not answering. Check your internet, turn off any VPN or ad blocker and try again',
     onLeave: 'Leave game', onIdle: 'Create a game or join with a code', onWait: 'Waiting for an opponent…', onYour: ' · your move', onTheirs: " · opponent's move",
     ckTag: 'Russian draughts: captures are compulsory, men capture backwards, kings move any distance',
@@ -1027,15 +1362,16 @@ function gameResult() {
 const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
 let round = 0; // bumped by "New game" so both players know to start over
+const encMove = m => m.from + '-' + m.to + (m.promo ? '-' + m.promo : '');
 const net = window.gambitNet.create('chess', $('onlineBox'), {
   side: () => sideSel.value,
   start: () => { round = 0; reset(false); },
-  getState: () => ({ round, resigned, moves: history.map(h => [h.m.from, h.m.to, h.m.promo || null]) }),
+  getState: () => ({ round, resigned, moves: history.map(h => encMove(h.m)) }),
   applyState: st => {
     if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
     if (st.round > round) { round = st.round; reset(true); }
     // Our moves must be the start of theirs; then catch up on whatever is missing
-    const same = (a, m) => Array.isArray(a) && a[0] === m.from && a[1] === m.to && (a[2] || null) === (m.promo || null);
+    const same = (a, m) => a === encMove(m);
     if (st.moves.length < history.length || !history.every((h, i) => same(st.moves[i], h.m))) return;
     for (let i = history.length; i < st.moves.length; i++) {
       const a = st.moves[i];
@@ -1046,7 +1382,7 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
     if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; analyze(); }
   },
   change: () => render(),
-  enter: () => { modeSel.value = 'online'; reset(false); }
+  enter: show => { if (show && window.gambitSetGame) window.gambitSetGame('chess'); modeSel.value = 'online'; reset(false); }
 });
 
 function reset(keepFlip) {
@@ -1463,11 +1799,11 @@ let round = 0; // bumped by "New game" so both players know to start over
 const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
   side: () => sideSel.value,
   start: () => { round = 0; reset(); },
-  getState: () => ({ round, moves: hist.map(h => h.m.path) }),
+  getState: () => ({ round, moves: hist.map(h => h.m.path.join('-')) }),
   applyState: st => {
     if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
     if (st.round > round) { round = st.round; reset(); }
-    const same = (a, m) => Array.isArray(a) && a.join() === m.path.join();
+    const same = (a, m) => a === m.path.join('-');
     if (st.moves.length < hist.length || !hist.every((h, i) => same(st.moves[i], h.m))) return;
     for (let i = hist.length; i < st.moves.length; i++) {
       const m = genMoves(S.b, S.turn).find(x => same(st.moves[i], x));
@@ -1476,7 +1812,7 @@ const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
     }
   },
   change: () => render(),
-  enter: () => { setGame('checkers'); modeSel.value = 'online'; reset(); }
+  enter: show => { if (show) setGame('checkers'); modeSel.value = 'online'; reset(); }
 });
 
 function result() {
@@ -1605,7 +1941,10 @@ document.addEventListener('gambit-lang', render);
 
 // ---------- Game switch ----------
 const tagEl = document.querySelector('header .tag');
+let currentGame = 'chess';
 function setGame(g) {
+  g = g || currentGame; currentGame = g;
+  $('adminApp').hidden = true;
   $('chessApp').hidden = g !== 'chess';
   $('checkersApp').hidden = g !== 'checkers';
   for (const b of document.querySelectorAll('[data-game]')) b.setAttribute('aria-pressed', String(b.dataset.game === g));
@@ -1619,12 +1958,10 @@ reset();
 let saved = 'chess';
 try { if (localStorage.getItem('gambit-game') === 'checkers') saved = 'checkers'; } catch (e) {}
 setGame(saved);
+window.gambitSetGame = setGame;
+window.gambitAuth.init();
 const q = new URLSearchParams(location.search);
-if (q.get('join')) {
-  const g = q.get('game') === 'checkers' ? 'checkers' : 'chess';
-  setGame(g);
-  window.gambitNet.joinFromLink(g, q.get('join'));
-}
+window.gambitNet.autoJoin(q.get('game') === 'checkers' ? 'checkers' : 'chess', q.get('join'));
 })();
 </script>
 </body>
