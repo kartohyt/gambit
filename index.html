@@ -368,6 +368,9 @@ window.gambitNet = (() => {
   // One online session per game. cb.start(color) begins a game, cb.message(msg) gets the opponent's moves.
   function create(game, box, cb) {
     let peer = null, conn = null, state = 'idle', code = '', myColor = null, err = '', copied = false;
+    let tries = 0, retry = null, gen = 0;
+    // Hiccups of the free PeerJS server: try again a few times before giving up
+    const TRANSIENT = ['server-error', 'socket-error', 'socket-closed', 'network', 'unavailable-id'];
 
     function close() {
       try { if (conn) conn.close(); } catch (e) {}
@@ -375,8 +378,23 @@ window.gambitNet = (() => {
       peer = null; conn = null;
     }
     function fail(e) {
-      err = e && e.type === 'peer-unavailable' ? t('onNoGame') : (e && (e.type || e.message)) || String(e);
-      state = 'error'; close(); draw(); cb.change();
+      const type = e && e.type;
+      // Once both players are linked, moves go browser to browser: losing the PeerJS server must not end the game
+      if (state === 'connected' && type !== 'peer-unavailable') {
+        try { if (peer && !peer.destroyed) peer.reconnect(); } catch (x) {}
+        return;
+      }
+      if (TRANSIENT.includes(type) && retry && tries < 3) {
+        tries++; close();
+        const g = gen, again = retry;
+        setTimeout(() => { if (g === gen) again(); }, 1000 * tries);
+        return;
+      }
+      err = type === 'peer-unavailable' ? t('onNoGame') : TRANSIENT.includes(type) ? t('onServer') : (e && (type || e.message)) || String(e);
+      retry = null; state = 'error'; close(); draw(); cb.change();
+    }
+    function keepAlive(p) {
+      p.on('disconnected', () => { if (state === 'waiting') { try { p.reconnect(); } catch (x) {} } });
     }
     function wire(c) {
       conn = c;
@@ -388,9 +406,11 @@ window.gambitNet = (() => {
       c.on('close', () => { if (state === 'connected') { state = 'lost'; draw(); cb.change(); } });
       c.on('error', fail);
     }
-    function host(side) {
+    function host(side) { gen++; tries = 0; retry = () => openHost(side); openHost(side); }
+    function openHost(side) {
       close(); code = makeCode(); state = 'opening'; copied = false; draw();
       peer = new window.Peer(PREFIX + game + '-' + code);
+      keepAlive(peer);
       peer.on('open', () => { state = 'waiting'; draw(); cb.change(); });
       peer.on('connection', c => {
         if (conn && conn.open) { c.on('open', () => c.close()); return; } // the room already has two players
@@ -406,12 +426,15 @@ window.gambitNet = (() => {
     function join(raw) {
       const c1 = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!c1) return;
+      gen++; tries = 0; retry = () => openJoin(c1); openJoin(c1);
+    }
+    function openJoin(c1) {
       close(); code = c1; state = 'connecting'; draw();
       peer = new window.Peer();
       peer.on('open', () => wire(peer.connect(PREFIX + game + '-' + code, { reliable: true })));
       peer.on('error', fail);
     }
-    function leave() { close(); state = 'idle'; myColor = null; draw(); cb.change(); }
+    function leave() { gen++; retry = null; close(); state = 'idle'; myColor = null; draw(); cb.change(); }
     function send(msg) { if (conn && conn.open) conn.send({ ...msg, game }); }
 
     function draw() {
@@ -506,6 +529,7 @@ const I18N = {
     onOpening: 'Подключение…', onConnecting: 'Ищем игру {c}…', onCode: 'Код игры', onCopy: 'Скопировать ссылку', onCopied: 'Ссылка скопирована',
     onWaiting: 'Отправьте другу код или ссылку и ждите: игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
     onLost: 'Соперник отключился.', onError: 'Не удалось подключиться: {e}', onNoGame: 'игры с таким кодом нет',
+    onServer: 'сервер связи не отвечает. Проверьте интернет, выключите VPN или блокировщик рекламы и попробуйте ещё раз',
     onLeave: 'Выйти из игры', onIdle: 'Создайте игру или войдите по коду', onWait: 'Ждём соперника…', onYour: ' · ваш ход', onTheirs: ' · ход соперника',
     ckTag: 'Русские шашки: бить обязательно, простые бьют и назад, дамка ходит на любое число полей',
     ckBoardLbl: 'Доска для шашек', ckLegend: 'c3-d4 ход, c3:e5 взятие', ckLeft: 'На доске: белых {w}, чёрных {b}',
@@ -535,6 +559,7 @@ const I18N = {
     onOpening: 'Connecting…', onConnecting: 'Looking for game {c}…', onCode: 'Game code', onCopy: 'Copy link', onCopied: 'Link copied',
     onWaiting: 'Send your friend the code or link and wait: the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
     onLost: 'Your opponent disconnected.', onError: 'Could not connect: {e}', onNoGame: 'no game with that code',
+    onServer: 'the connection server is not answering. Check your internet, turn off any VPN or ad blocker and try again',
     onLeave: 'Leave game', onIdle: 'Create a game or join with a code', onWait: 'Waiting for an opponent…', onYour: ' · your move', onTheirs: " · opponent's move",
     ckTag: 'Russian draughts: captures are compulsory, men capture backwards, kings move any distance',
     ckBoardLbl: 'Checkers board', ckLegend: 'c3-d4 move, c3:e5 capture', ckLeft: 'On the board: White {w}, Black {b}',
