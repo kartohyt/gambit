@@ -209,7 +209,7 @@ button.b:disabled { opacity: .45; cursor: default; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .sq.drop .pc { animation: none; } }
 </style>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -348,15 +348,20 @@ button.b:disabled { opacity: .45; cursor: default; }
 </div>
 
 <script>
-// ---------- Online play: browser to browser through PeerJS ----------
+// ---------- Online play: both players exchange the game through free public MQTT servers ----------
+// Every message carries the whole game (round, moves, resignation), so a message lost on the way
+// is repaired by the next one; both players re-send it every few seconds as a heartbeat.
 window.gambitNet = (() => {
   'use strict';
   const t = (k, v) => window.gambitI18n.t(k, v);
-  // Inside a claude.ai artifact WebRTC is blocked, so online play exists only on the published site
-  const available = typeof window.Peer === 'function' && !window.claude;
-  const PREFIX = 'gambit-v1-';
+  // Inside a claude.ai artifact network sockets are blocked, so online play exists only on the published site
+  const available = typeof window.mqtt === 'object' && !window.claude;
+  const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+  const BEAT = 4000, LOST_AFTER = 15000, JOIN_TIMEOUT = 30000, CONNECT_TIMEOUT = 15000;
   const hooks = {};
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rid = n => Array.from({ length: n }, () => 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('');
+  const pageNonce = rid(4); // keeps message ids unique when a reloaded page reuses its player id
 
   function makeCode() {
     const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -365,86 +370,132 @@ window.gambitNet = (() => {
     return s;
   }
 
-  // One online session per game. cb.start(color) begins a game, cb.message(msg) gets the opponent's moves.
+  // One online session per game. cb.getState()/cb.applyState(st) move the game between the two players.
   function create(game, box, cb) {
-    let peer = null, conn = null, state = 'idle', code = '', myColor = null, err = '', copied = false;
-    let tries = 0, retry = null, gen = 0;
-    // Hiccups of the free PeerJS server: try again a few times before giving up
-    const TRANSIENT = ['server-error', 'socket-error', 'socket-closed', 'network', 'unavailable-id'];
+    // The same id survives a reload of this tab, so a player who refreshes gets their seat back
+    let myId = '';
+    try { myId = sessionStorage.getItem('gambit-net-' + game) || ''; } catch (e) {}
+    if (!/^[a-z0-9]{10}$/.test(myId)) {
+      myId = rid(10);
+      try { sessionStorage.setItem('gambit-net-' + game, myId); } catch (e) {}
+    }
+    let clients = [], state = 'idle', code = '', side = 'w', myColor = null, opp = null, err = '', copied = false;
+    let seq = 0, seen = new Set(), lastSeen = 0, beat = null, joinTimer = null, failTimer = null;
 
+    const topic = () => 'gambit/v1/' + game + '/' + code;
+    function stopTimers() {
+      clearInterval(beat); clearInterval(joinTimer); clearTimeout(failTimer);
+      beat = joinTimer = failTimer = null;
+    }
     function close() {
-      try { if (conn) conn.close(); } catch (e) {}
-      try { if (peer) peer.destroy(); } catch (e) {}
-      peer = null; conn = null;
+      stopTimers();
+      for (const c of clients) { try { c.end(true); } catch (e) {} }
+      clients = []; opp = null;
     }
-    function fail(e) {
-      const type = e && e.type;
-      // Once both players are linked, moves go browser to browser: losing the PeerJS server must not end the game
-      if (state === 'connected' && type !== 'peer-unavailable') {
-        try { if (peer && !peer.destroyed) peer.reconnect(); } catch (x) {}
-        return;
-      }
-      if (TRANSIENT.includes(type) && retry && tries < 3) {
-        tries++; close();
-        const g = gen, again = retry;
-        setTimeout(() => { if (g === gen) again(); }, 1000 * tries);
-        return;
-      }
-      err = type === 'peer-unavailable' ? t('onNoGame') : TRANSIENT.includes(type) ? t('onServer') : (e && (type || e.message)) || String(e);
-      retry = null; state = 'error'; close(); draw(); cb.change();
+    function setState(s) { state = s; draw(); cb.change(); }
+    function fail(message) { err = message; close(); setState('error'); }
+
+    function publish(msg) {
+      const data = JSON.stringify({ ...msg, from: myId, mid: myId + '-' + pageNonce + '-' + (++seq) });
+      for (const c of clients) if (c.connected) c.publish(topic(), data, { qos: 1 });
     }
-    function keepAlive(p) {
-      p.on('disconnected', () => { if (state === 'waiting') { try { p.reconnect(); } catch (x) {} } });
-    }
-    function wire(c) {
-      conn = c;
-      c.on('data', msg => {
-        if (!msg || msg.game !== game) return;
-        if (msg.t === 'hello') { myColor = msg.youAre === 'b' ? 'b' : 'w'; state = 'connected'; draw(); cb.start(myColor); }
-        else cb.message(msg);
-      });
-      c.on('close', () => { if (state === 'connected') { state = 'lost'; draw(); cb.change(); } });
-      c.on('error', fail);
-    }
-    function host(side) { gen++; tries = 0; retry = () => openHost(side); openHost(side); }
-    function openHost(side) {
-      close(); code = makeCode(); state = 'opening'; copied = false; draw();
-      peer = new window.Peer(PREFIX + game + '-' + code);
-      keepAlive(peer);
-      peer.on('open', () => { state = 'waiting'; draw(); cb.change(); });
-      peer.on('connection', c => {
-        if (conn && conn.open) { c.on('open', () => c.close()); return; } // the room already has two players
-        wire(c);
-        c.on('open', () => {
-          myColor = side; state = 'connected';
-          c.send({ game, t: 'hello', youAre: side === 'w' ? 'b' : 'w' });
-          draw(); cb.start(myColor);
+    function pushState() { if (opp) publish({ t: 'state', to: opp, st: cb.getState() }); }
+
+    // Connect to every broker at once and use whichever answers; messages are de-duplicated by id
+    function connectAll(onReady) {
+      close();
+      let ready = false;
+      for (const url of BROKERS) {
+        let c;
+        try { c = window.mqtt.connect(url, { clientId: 'gambit_' + myId + '_' + rid(4), clean: true, connectTimeout: 10000, reconnectPeriod: 2000, keepalive: 30 }); }
+        catch (e) { continue; }
+        clients.push(c);
+        c.on('connect', () => {
+          c.subscribe(topic(), { qos: 1 }, e => {
+            if (e) return;
+            if (!ready) { ready = true; clearTimeout(failTimer); onReady(); }
+            else pushState();
+          });
         });
-      });
-      peer.on('error', fail);
+        c.on('message', (tp, buf) => receive(buf));
+        c.on('error', () => {});
+      }
+      failTimer = setTimeout(() => { if (!ready) fail(t('onServer')); }, CONNECT_TIMEOUT);
+    }
+
+    function startBeat() {
+      clearInterval(beat);
+      lastSeen = Date.now();
+      beat = setInterval(() => {
+        pushState();
+        if (state === 'connected' && Date.now() - lastSeen > LOST_AFTER) setState('lost');
+      }, BEAT);
+    }
+
+    function receive(buf) {
+      let msg;
+      try { msg = JSON.parse(String(buf)); } catch (e) { return; }
+      if (!msg || typeof msg !== 'object' || msg.from === myId || seen.has(msg.mid)) return;
+      seen.add(msg.mid);
+      if (seen.size > 500) seen = new Set([...seen].slice(-200));
+
+      const oppQuiet = state === 'connected' && Date.now() - lastSeen > 2 * BEAT;
+      if (msg.t === 'join' && (state === 'waiting' || state === 'lost' || msg.from === opp || oppQuiet)) {
+        // The first player to knock gets the seat; a friend who reloaded the page can take it back
+        // and receives the game so far. Anyone else with the code is ignored.
+        const fresh = state === 'waiting';
+        opp = msg.from; myColor = side;
+        publish({ t: 'hello', to: opp, youAre: side === 'w' ? 'b' : 'w' });
+        if (fresh) { setState('connected'); cb.start(myColor); startBeat(); }
+        else { lastSeen = Date.now(); if (state === 'lost') setState('connected'); }
+        pushState();
+      } else if (msg.t === 'hello' && msg.to === myId && state === 'connecting') {
+        opp = msg.from; myColor = msg.youAre === 'b' ? 'b' : 'w';
+        clearInterval(joinTimer);
+        setState('connected'); cb.start(myColor); startBeat();
+      } else if (opp && msg.from === opp && msg.to === myId) {
+        lastSeen = Date.now();
+        if (state === 'lost') setState('connected');
+        if (msg.t === 'state' && msg.st) cb.applyState(msg.st);
+        else if (msg.t === 'bye') setState('lost');
+      }
+    }
+
+    function host(s) {
+      side = s; code = makeCode(); copied = false; setState('opening');
+      connectAll(() => setState('waiting'));
     }
     function join(raw) {
       const c1 = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!c1) return;
-      gen++; tries = 0; retry = () => openJoin(c1); openJoin(c1);
+      code = c1; setState('connecting');
+      connectAll(() => {
+        const started = Date.now();
+        // Knock until the host answers: its server may need a moment to pass the message along
+        const knock = () => {
+          if (state !== 'connecting') return;
+          if (Date.now() - started > JOIN_TIMEOUT) { fail(t('onNoGame', { c: code })); return; }
+          publish({ t: 'join' });
+        };
+        knock();
+        joinTimer = setInterval(knock, 2000);
+      });
     }
-    function openJoin(c1) {
-      close(); code = c1; state = 'connecting'; draw();
-      peer = new window.Peer();
-      peer.on('open', () => wire(peer.connect(PREFIX + game + '-' + code, { reliable: true })));
-      peer.on('error', fail);
+    function leave() {
+      if (opp) publish({ t: 'bye', to: opp });
+      const old = clients;
+      clients = [];
+      setTimeout(() => { for (const c of old) { try { c.end(true); } catch (e) {} } }, 300);
+      stopTimers(); opp = null; myColor = null; setState('idle');
     }
-    function leave() { gen++; retry = null; close(); state = 'idle'; myColor = null; draw(); cb.change(); }
-    function send(msg) { if (conn && conn.open) conn.send({ ...msg, game }); }
 
     function draw() {
       const link = location.origin + location.pathname + '?game=' + game + '&join=' + code;
       const joinForm = `<div class="muted">${t('onOr')}</div>
         <form class="row" data-act="join"><input id="${game}-code" maxlength="8" autocomplete="off" placeholder="${t('onCodePh')}" aria-label="${t('onCodePh')}"><button class="b">${t('onJoin')}</button></form>`;
       let h = '';
-      if (state === 'idle' || state === 'error' || state === 'lost') {
+      if (state === 'idle' || state === 'error') {
         if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
-        if (state === 'lost') h += `<div class="warn">${t('onLost')}</div>`;
         h += `<div class="row"><button class="b primary" data-act="host">${t('onCreate')}</button></div>` + joinForm;
       } else if (state === 'opening' || state === 'connecting') {
         h += `<div class="muted">${state === 'opening' ? t('onOpening') : esc(t('onConnecting', { c: code }))}</div>
@@ -455,9 +506,10 @@ window.gambitNet = (() => {
           <div class="row"><button class="b primary" data-act="copy" data-link="${esc(link)}">${copied ? t('onCopied') : t('onCopy')}</button>
           <button class="b" data-act="leave">${t('cancel')}</button></div>
           <div class="muted">${t('onWaiting')}</div>`;
-      } else if (state === 'connected') {
-        h += `<div class="ok">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
-          <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
+      } else if (state === 'connected' || state === 'lost') {
+        h += state === 'lost' ? `<div class="warn">${t('onLost')}</div>`
+          : `<div class="ok">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>`;
+        h += `<div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
       }
       box.innerHTML = h;
     }
@@ -477,11 +529,12 @@ window.gambitNet = (() => {
       e.preventDefault();
       join(box.querySelector('input').value);
     });
+    window.addEventListener('pagehide', () => { if (opp) publish({ t: 'bye', to: opp }); });
     document.addEventListener('gambit-lang', draw);
     draw();
 
     const session = {
-      join, leave, send, draw,
+      join, leave, draw, push: pushState,
       color: () => (state === 'connected' ? myColor : null),
       active: () => state === 'connected',
       waiting: () => state === 'waiting'
@@ -528,7 +581,7 @@ const I18N = {
     online: 'Онлайн с другом', onCreate: 'Создать игру', onJoin: 'Войти', onCodePh: 'Код игры', onOr: 'или войдите по коду друга',
     onOpening: 'Подключение…', onConnecting: 'Ищем игру {c}…', onCode: 'Код игры', onCopy: 'Скопировать ссылку', onCopied: 'Ссылка скопирована',
     onWaiting: 'Отправьте другу код или ссылку и ждите: игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
-    onLost: 'Соперник отключился.', onError: 'Не удалось подключиться: {e}', onNoGame: 'игры с таким кодом нет',
+    onLost: 'Соперник пропал со связи. Ждём, пока он вернётся…', onError: 'Не удалось подключиться: {e}', onNoGame: 'игра {c} не найдена. Проверьте код: друг должен держать страницу с игрой открытой',
     onServer: 'сервер связи не отвечает. Проверьте интернет, выключите VPN или блокировщик рекламы и попробуйте ещё раз',
     onLeave: 'Выйти из игры', onIdle: 'Создайте игру или войдите по коду', onWait: 'Ждём соперника…', onYour: ' · ваш ход', onTheirs: ' · ход соперника',
     ckTag: 'Русские шашки: бить обязательно, простые бьют и назад, дамка ходит на любое число полей',
@@ -558,7 +611,7 @@ const I18N = {
     online: 'Online with a friend', onCreate: 'Create game', onJoin: 'Join', onCodePh: 'Game code', onOr: "or join with your friend's code",
     onOpening: 'Connecting…', onConnecting: 'Looking for game {c}…', onCode: 'Game code', onCopy: 'Copy link', onCopied: 'Link copied',
     onWaiting: 'Send your friend the code or link and wait: the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
-    onLost: 'Your opponent disconnected.', onError: 'Could not connect: {e}', onNoGame: 'no game with that code',
+    onLost: 'Your opponent lost the connection. Waiting for them to come back…', onError: 'Could not connect: {e}', onNoGame: 'game {c} was not found. Check the code: your friend must keep the game page open',
     onServer: 'the connection server is not answering. Check your internet, turn off any VPN or ad blocker and try again',
     onLeave: 'Leave game', onIdle: 'Create a game or join with a code', onWait: 'Waiting for an opponent…', onYour: ' · your move', onTheirs: " · opponent's move",
     ckTag: 'Russian draughts: captures are compulsory, men capture backwards, kings move any distance',
@@ -973,16 +1026,24 @@ function gameResult() {
 
 const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
+let round = 0; // bumped by "New game" so both players know to start over
 const net = window.gambitNet.create('chess', $('onlineBox'), {
   side: () => sideSel.value,
-  start: () => reset(false),
-  message: msg => {
-    if (msg.t === 'new') reset(false);
-    else if (msg.t === 'resign' && !gameResult().over) { resigned = opp(net.color()); analyze(); }
-    else if (msg.t === 'move' && G.turn !== net.color() && !gameResult().over) {
-      const m = legal(G).find(x => x.from === msg.from && x.to === msg.to && (x.promo || null) === (msg.promo || null));
-      if (m) play(m, true);
+  start: () => { round = 0; reset(false); },
+  getState: () => ({ round, resigned, moves: history.map(h => [h.m.from, h.m.to, h.m.promo || null]) }),
+  applyState: st => {
+    if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
+    if (st.round > round) { round = st.round; reset(true); }
+    // Our moves must be the start of theirs; then catch up on whatever is missing
+    const same = (a, m) => Array.isArray(a) && a[0] === m.from && a[1] === m.to && (a[2] || null) === (m.promo || null);
+    if (st.moves.length < history.length || !history.every((h, i) => same(st.moves[i], h.m))) return;
+    for (let i = history.length; i < st.moves.length; i++) {
+      const a = st.moves[i];
+      const m = !gameResult().over && legal(G).find(x => same(a, x));
+      if (!m) break;
+      play(m, true);
     }
+    if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; analyze(); }
   },
   change: () => render(),
   enter: () => { modeSel.value = 'online'; reset(false); }
@@ -1001,7 +1062,7 @@ function play(m, remote) {
   make(G, m);
   history.push({ m, san: notation });
   keys.push(posKey(G));
-  if (online() && !remote) net.send({ t: 'move', from: m.from, to: m.to, promo: m.promo || null });
+  if (online() && !remote) net.push();
   sel = null; targets = []; dropSq = m.to; view = null;
   if (gameResult().over) { analyze(); return; }
   render();
@@ -1021,9 +1082,9 @@ function maybeAI() {
 function resign() {
   if (thinking || !history.length || gameResult().over || (online() && !net.active())) return;
   resigned = online() ? net.color() : aiColor() ? sideSel.value : G.turn;
-  if (online()) net.send({ t: 'resign' });
   sel = null; targets = []; pendingPromo = null;
   analyze();
+  if (online()) net.push();
 }
 
 function undo() {
@@ -1183,7 +1244,7 @@ boardEl.addEventListener('click', e => {
 $('newBtn').addEventListener('click', () => {
   if (thinking) return;
   reset(false);
-  if (online()) net.send({ t: 'new' });
+  if (online()) { round++; net.push(); }
 });
 $('undoBtn').addEventListener('click', undo);
 $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
@@ -1398,14 +1459,20 @@ const modeSel = $('ckMode'), sideSel = $('ckSide'), levelSel = $('ckLevel'), boa
 let S, hist, sel = null, targets = [], flipped = false, thinking = false;
 const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
+let round = 0; // bumped by "New game" so both players know to start over
 const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
   side: () => sideSel.value,
-  start: () => reset(),
-  message: msg => {
-    if (msg.t === 'new') reset();
-    else if (msg.t === 'move' && S.turn !== net.color() && !result().over && Array.isArray(msg.path)) {
-      const m = genMoves(S.b, S.turn).find(x => x.path.join() === msg.path.join());
-      if (m) play(m, true);
+  start: () => { round = 0; reset(); },
+  getState: () => ({ round, moves: hist.map(h => h.m.path) }),
+  applyState: st => {
+    if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
+    if (st.round > round) { round = st.round; reset(); }
+    const same = (a, m) => Array.isArray(a) && a.join() === m.path.join();
+    if (st.moves.length < hist.length || !hist.every((h, i) => same(st.moves[i], h.m))) return;
+    for (let i = hist.length; i < st.moves.length; i++) {
+      const m = genMoves(S.b, S.turn).find(x => same(st.moves[i], x));
+      if (!m) break;
+      play(m, true);
     }
   },
   change: () => render(),
@@ -1428,11 +1495,11 @@ function reset() {
 
 function play(m, remote) {
   const kingMove = isKing(S.b[m.from]);
-  if (online() && !remote) net.send({ t: 'move', path: m.path });
   hist.push({ b: S.b, turn: S.turn, kc: S.kc, m, san: notation(m) });
   S.b = apply(S.b, m);
   S.kc = m.caps.length || !kingMove ? 0 : S.kc + 1;
   S.turn = opp(S.turn);
+  if (online() && !remote) net.push();
   sel = null; targets = [];
   render(); maybeAI();
 }
@@ -1527,7 +1594,7 @@ boardEl.addEventListener('click', e => {
 $('ckNew').addEventListener('click', () => {
   if (thinking) return;
   reset();
-  if (online()) net.send({ t: 'new' });
+  if (online()) { round++; net.push(); }
 });
 $('ckUndo').addEventListener('click', undo);
 $('ckFlip').addEventListener('click', () => { flipped = !flipped; render(); });
