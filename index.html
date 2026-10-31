@@ -327,6 +327,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
               <option value="easy" data-t="easy">Лёгкая</option>
               <option value="medium" data-t="medium">Средняя</option>
               <option value="hard" data-t="hard">Сложная</option>
+              <option value="impossible" data-t="impossible">Невозможная</option>
             </select>
             <span class="bot-elo" id="botElo"></span>
           </label>
@@ -415,6 +416,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
               <option value="easy" data-t="easy">Лёгкая</option>
               <option value="medium" data-t="medium">Средняя</option>
               <option value="hard" data-t="hard">Сложная</option>
+              <option value="impossible" data-t="impossible">Невозможная</option>
             </select>
             <span class="bot-elo" id="ckBotElo"></span>
           </label>
@@ -539,19 +541,26 @@ window.gambitAuth = (() => {
     const c = m ? m[1].toLowerCase() : '';
     return COUNTRIES.includes(c) ? c : '';
   }
-  // Standard Elo: K = 40 for the first 20 games, then 20
-  async function rate(game, oppElo, score) {
-    if (!(user && profile && !profile.banned)) return null;
+  // Standard Elo: K = 40 for the first 20 games, then 20. Against a bot a win is worth at least
+  // `floor` points (it grows with the bot's strength), so every bot is worth beating.
+  function eloDelta(game, oppElo, score, floor) {
     const old = eloOf(profile, game), n = ratedOf(profile, game);
     const K = n < 20 ? 40 : 20;
     const expected = 1 / (1 + Math.pow(10, (oppElo - old) / 400));
-    const next = Math.max(100, Math.min(3500, old + Math.round(K * (score - expected))));
+    let d = Math.round(K * (score - expected));
+    if (score === 1 && floor) d = Math.max(d, floor);
+    return Math.max(100, Math.min(3500, old + d)) - old;
+  }
+  async function rate(game, oppElo, score, floor = 0) {
+    if (!(user && profile && !profile.banned)) return null;
+    const old = eloOf(profile, game), n = ratedOf(profile, game);
+    const next = old + eloDelta(game, oppElo, score, floor);
     const elo = { chess: eloOf(profile, 'chess'), checkers: eloOf(profile, 'checkers'), [game]: next };
     const rated = { chess: ratedOf(profile, 'chess'), checkers: ratedOf(profile, 'checkers'), [game]: n + 1 };
     try {
       await db.collection('users').doc(user.uid).update({ elo, rated, lastRated: ts() });
       profile.elo = elo; profile.rated = rated;
-      renderAcct();
+      renderAcct(); emit();
       return { old, next, delta: next - old };
     } catch (e) {
       return { error: e.code === 'permission-denied' ? 'fast' : 'fail' };
@@ -766,6 +775,10 @@ window.gambitAuth = (() => {
     // Re-read the profile (the rating may have changed in another tab) before it goes into a game
     refresh: async () => { if (user) { await loadProfile(user); renderAcct(); } },
     badge, rate,
+    // What a win, a draw and a loss would do to the rating right now
+    preview: (game, oppElo, floor) => (user && profile && !profile.banned
+      ? { w: eloDelta(game, oppElo, 1, floor), d: eloDelta(game, oppElo, 0.5, floor), l: eloDelta(game, oppElo, 0, floor) }
+      : null),
     canPlay: () => !!(user && profile && !profile.banned),
     banned: () => !!(profile && profile.banned),
     // Ask the player to sign in, then carry on with what they were doing
@@ -987,7 +1000,7 @@ const I18N = {
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
     rtFast: 'Партия без рейтинга: прошло меньше 15 секунд после прошлой.', rtFail: 'Не удалось сохранить рейтинг.',
-    rtSaving: 'Считаем рейтинг…', rtGuest: 'Войдите, чтобы партии шли в рейтинг.', rtBot: 'Рейтинг бота: {e}',
+    rtSaving: 'Считаем рейтинг…', rtGuest: 'Войдите, чтобы партии шли в рейтинг.', rtBot: 'Рейтинг бота: {e}', rtOdds: 'победа {w} · ничья {d} · поражение {l}',
     acProfile: 'Профиль', acCountry: 'Страна', acNoCountry: '— не указывать —', acSaved: 'Сохранено.', adElo: 'Эло (шахм. / шашки)',
     acLogin: 'Войти', acRegister: 'Регистрация', acTitle: 'Аккаунт', acCreate: 'Создать аккаунт', acSave: 'Сохранить',
     acLogout: 'Выйти', acAdmin: 'Админка', acFinish: 'Завершить регистрацию', acBanned: 'заблокирован',
@@ -1017,7 +1030,7 @@ const I18N = {
     ckMust: 'Бить обязательно', ckWinW: 'Победа белых: у чёрных нет ходов', ckWinB: 'Победа чёрных: у белых нет ходов',
     ckDraw: 'Ничья: 15 ходов дамками без взятий', ckRulesH: 'Правила',
     ckRules: 'Шашки ходят по диагонали на одно поле вперёд. Бить обязательно, вперёд и назад, и бить нужно до конца, пока есть кого. Шашка, дошедшая до последнего ряда, становится дамкой и ходит по диагонали на любое число полей. Проигрывает тот, кому нечем ходить.',
-    level: 'Сложность', easy: 'Лёгкая', medium: 'Средняя', hard: 'Сложная',
+    level: 'Сложность', easy: 'Лёгкая', medium: 'Средняя', hard: 'Сложная', impossible: 'Невозможная',
     newg: 'Новая партия', undo: 'Отменить ход', flip: 'Перевернуть', resign: 'Сдаться',
     report: 'Отчёт партии', sheet: 'Запись партии', legend: 'Кр Ф Л С К',
     analysis: 'Анализ {k} из {n}', colW: 'Белые', colB: 'Чёрные', acc: 'Точность',
@@ -1040,7 +1053,7 @@ const I18N = {
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
     rtFast: 'Unrated game: less than 15 seconds since the last one.', rtFail: 'Could not save the rating.',
-    rtSaving: 'Updating the rating…', rtGuest: 'Sign in to have your games rated.', rtBot: 'Bot rating: {e}',
+    rtSaving: 'Updating the rating…', rtGuest: 'Sign in to have your games rated.', rtBot: 'Bot rating: {e}', rtOdds: 'win {w} · draw {d} · loss {l}',
     acProfile: 'Profile', acCountry: 'Country', acNoCountry: '— not shown —', acSaved: 'Saved.', adElo: 'Elo (chess / checkers)',
     acLogin: 'Sign in', acRegister: 'Sign up', acTitle: 'Account', acCreate: 'Create account', acSave: 'Save',
     acLogout: 'Sign out', acAdmin: 'Admin', acFinish: 'Finish sign-up', acBanned: 'banned',
@@ -1070,7 +1083,7 @@ const I18N = {
     ckMust: 'You must capture', ckWinW: 'White wins: Black has no moves', ckWinB: 'Black wins: White has no moves',
     ckDraw: 'Draw: 15 king moves without a capture', ckRulesH: 'Rules',
     ckRules: 'Men move one square diagonally forward. Capturing is compulsory, forwards and backwards, and you keep capturing while you can. A man that reaches the far row becomes a king and moves any number of squares diagonally. The player with no legal move loses.',
-    level: 'Difficulty', easy: 'Easy', medium: 'Medium', hard: 'Hard',
+    level: 'Difficulty', easy: 'Easy', medium: 'Medium', hard: 'Hard', impossible: 'Impossible',
     newg: 'New game', undo: 'Undo move', flip: 'Flip board', resign: 'Resign',
     report: 'Game report', sheet: 'Moves', legend: 'K Q R B N',
     analysis: 'Analysing {k} of {n}', colW: 'White', colB: 'Black', acc: 'Accuracy',
@@ -1357,6 +1370,8 @@ function botMove(s, level) {
   if (level === 'easy') return dumbMove(s);
   if (level === 'medium') return Math.random() < 0.15 ? dumbMove(s) : searchMove(s, 2, 60);
   const endgame = s.b.filter(Boolean).length <= 10;
+  // Impossible: one ply deeper than hard and no deliberate slips
+  if (level === 'impossible') return searchMove(s, endgame ? 5 : 4, 0);
   return searchMove(s, endgame ? 4 : 3, 8);
 }
 
@@ -1482,7 +1497,7 @@ const encMove = m => m.from + '-' + m.to + (m.promo ? '-' + m.promo : '');
 
 // ---------- Rating ----------
 // Bot strength on the Elo scale, so a win over the weak bot is worth almost nothing
-const BOT_ELO = { easy: 400, medium: 1000, hard: 1500 };
+const BOT_ELO = { easy: 400, medium: 1000, hard: 1500, impossible: 2000 };
 const A = () => window.gambitAuth;
 let rs = {}; // this game's rating state: mode, side and bot level it started with
 let ratingNote = '';
@@ -1494,6 +1509,9 @@ function myRatedColor() {
   return rs.mode === 'ai' ? rs.side : null;
 }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
+// Smallest win against a bot: 2 for the 400 bot up to 8 for the 2000 bot
+const botFloor = elo => Math.round(elo / 250);
+const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
 function noteFor(r, key) {
   if (!r) return '';
   if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
@@ -1512,7 +1530,7 @@ function finishRated() {
   const winner = { mateW: 'w', resB: 'w', mateB: 'b', resW: 'b' }[key];
   const score = winner ? (winner === me ? 1 : 0) : 0.5;
   setNote(t('rtSaving'));
-  A().rate('chess', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
+  A().rate('chess', ratedOppElo(), score, ratedFloor()).then(r => setNote(noteFor(r, 'rtResult')));
 }
 // ---------- Best-move hint (admin only) ----------
 // Full engine strength without the bot's randomness
@@ -1742,7 +1760,11 @@ function render() {
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
   $('onlineBox').hidden = !online();
-  $('botElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
+  {
+    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('chess', be, botFloor(be));
+    const sg = d => (d > 0 ? '+' + d : d < 0 ? '−' + -d : '±0');
+    $('botElo').textContent = t('rtBot', { e: be }) + (pv ? ' · ' + t('rtOdds', { w: sg(pv.w), d: sg(pv.d), l: sg(pv.l) }) : '');
+  }
   $('ratingNote').innerHTML = ratingNote;
   $('hintBtn').hidden = !(A() && A().isAdmin());
   $('hintBtn').disabled = thinking || res.over || view !== null;
@@ -1980,6 +2002,7 @@ function botMove(b, col, level) {
   if (!ms.length) return null;
   if (level === 'easy') return ms[Math.floor(Math.random() * ms.length)];
   if (level === 'medium') return Math.random() < 0.15 ? ms[Math.floor(Math.random() * ms.length)] : searchMove(b, col, 3, 40);
+  if (level === 'impossible') return searchMove(b, col, 8, 0);
   return searchMove(b, col, 7, 4);
 }
 
@@ -1991,12 +2014,15 @@ const online = () => modeSel.value === 'online';
 let round = 0; // bumped by "New game" so both players know to start over
 
 // ---------- Rating ----------
-const BOT_ELO = { easy: 400, medium: 1000, hard: 1600 };
+const BOT_ELO = { easy: 400, medium: 1000, hard: 1600, impossible: 2100 };
 const A = () => window.gambitAuth;
 let rs = {}, ratingNote = '';
 function newRating() { rs = { mode: modeSel.value, side: sideSel.value, level: levelSel.value, unrated: '', done: false }; }
 function myRatedColor() { return rs.mode === 'online' ? net.color() : rs.mode === 'ai' ? rs.side : null; }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
+// Smallest win against a bot: 2 for the 400 bot up to 8 for the 2000 bot
+const botFloor = elo => Math.round(elo / 250);
+const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
 function noteFor(r, key) {
   if (!r) return '';
   if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
@@ -2013,7 +2039,7 @@ function finishRated() {
   const key = result().key;
   const score = key === 'ckDraw' ? 0.5 : (key === 'ckWinW') === (me === 'w') ? 1 : 0;
   setNote(t('rtSaving'));
-  A().rate('checkers', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
+  A().rate('checkers', ratedOppElo(), score, ratedFloor()).then(r => setNote(noteFor(r, 'rtResult')));
 }
 // Best-move hint (admin only)
 let adminHint = null;
@@ -2286,7 +2312,11 @@ function render() {
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
   $('ckOnlineBox').hidden = !online();
-  $('ckBotElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
+  {
+    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('checkers', be, botFloor(be));
+    const sg = d => (d > 0 ? '+' + d : d < 0 ? '−' + -d : '±0');
+    $('ckBotElo').textContent = t('rtBot', { e: be }) + (pv ? ' · ' + t('rtOdds', { w: sg(pv.w), d: sg(pv.d), l: sg(pv.l) }) : '');
+  }
   $('ckRatingNote').innerHTML = ratingNote;
   $('ckHintBtn').hidden = !(A() && A().isAdmin());
   $('ckHintBtn').disabled = thinking || res.over || view !== null;
