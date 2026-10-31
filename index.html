@@ -721,6 +721,9 @@ window.gambitAuth = (() => {
     window.firebase.initializeApp(cfg);
     auth = window.firebase.auth();
     db = window.firebase.firestore();
+    // Networks that break streaming connections (some VPNs, antivirus, office proxies) stall live
+    // updates; let the SDK detect that and fall back to long polling
+    db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
     // Local testing against the Firebase emulators: http://localhost:<port>/?emu
     if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).has('emu')) {
       auth.useEmulator('http://127.0.0.1:9099');
@@ -810,9 +813,11 @@ window.gambitNet = (() => {
 
   function create(game, box, cb) {
     let state = 'idle', code = '', myColor = null, opp = null, err = '', copied = false, unsub = null, ref = null;
+    let pushing = false, pushAgain = false, pushTries = 0, sending = false, watchTimer = null;
     const roomKey = 'gambit-room-' + game;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    function stop() { if (unsub) unsub(); unsub = null; }
+    function stop() { if (unsub) unsub(); unsub = null; clearTimeout(watchTimer); }
     function setState(s) { state = s; draw(); cb.change(); }
     function forget() { try { sessionStorage.removeItem(roomKey); } catch (e) {} }
     function remember() { try { sessionStorage.setItem(roomKey, code); } catch (e) {} }
@@ -828,8 +833,12 @@ window.gambitNet = (() => {
 
     function watch() {
       stop();
-      unsub = ref.onSnapshot(snap => {
+      // includeMetadataChanges tells us when our own move has reached the server
+      unsub = ref.onSnapshot({ includeMetadataChanges: true }, snap => {
         if (!snap.exists) { fail(t('onNoGame', { c: code })); return; }
+        const wasSending = sending;
+        sending = snap.metadata.hasPendingWrites;
+        if (wasSending !== sending && state === 'connected') draw();
         const g = snap.data(), me = A.user() && A.user().uid;
         const amHost = g.host === me;
         if (!g.guest) { if (amHost && state !== 'waiting') setState('waiting'); return; }
@@ -838,8 +847,20 @@ window.gambitNet = (() => {
           ? { nick: g.guestNick, elo: g.guestElo, country: g.guestCountry, admin: !!g.guestAdmin }
           : { nick: g.hostNick, elo: g.hostElo, country: g.hostCountry, admin: !!g.hostAdmin };
         if (state !== 'connected') { setState('connected'); cb.start(myColor); countGame(); }
-        cb.applyState({ round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null });
-      }, e => fail(A.errText(e)));
+        const server = { round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null };
+        cb.applyState(server);
+        // Self-healing: the server copy is behind ours (a write was lost), so send our game again
+        if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache && !pushing) {
+          const mine = cb.getState();
+          if (mine.round > server.round || (mine.round === server.round && mine.moves.length > server.moves.length)
+              || (mine.resigned && !server.resigned)) push();
+        }
+      }, e => {
+        // A dropped connection must not end the game: listen again in a moment
+        if (e.code === 'permission-denied' || e.code === 'not-found') { fail(A.errText(e)); return; }
+        unsub = null;
+        watchTimer = setTimeout(() => { if (ref && (state === 'connected' || state === 'waiting')) watch(); }, 2000);
+      });
     }
 
     async function host(side) {
@@ -883,11 +904,26 @@ window.gambitNet = (() => {
       } catch (e) { fail(A.errText(e)); }
     }
 
-    function leave() { stop(); forget(); myColor = null; setState('idle'); }
+    function leave() { stop(); forget(); myColor = null; pushAgain = false; setState('idle'); }
 
-    function push() {
+    // Send the whole game; on a failure try again with a growing pause, and send the newest
+    // state if more moves were made meanwhile
+    async function push() {
       if (state !== 'connected' || !ref) return;
-      ref.update({ ...cb.getState(), updatedAt: A.ts() }).catch(e => { err = A.errText(e); draw(); });
+      if (pushing) { pushAgain = true; return; }
+      pushing = true;
+      const target = ref;
+      try {
+        await target.update({ ...cb.getState(), updatedAt: A.ts() });
+        pushTries = 0;
+        if (err) { err = ''; draw(); }
+      } catch (e) {
+        if (e.code === 'permission-denied') { err = A.errText(e); draw(); }
+        else if (pushTries < 8) { pushTries++; pushAgain = true; await sleep(Math.min(8000, 400 * 2 ** pushTries)); }
+        else { err = A.errText(e); draw(); }
+      }
+      pushing = false;
+      if (pushAgain && target === ref) { pushAgain = false; push(); }
     }
 
     function draw() {
@@ -914,6 +950,7 @@ window.gambitNet = (() => {
       } else if (state === 'connected') {
         h += `<div class="ok">${t('onVs')} ${opp ? A.badge(opp) : '?'}</div>
           <div class="muted">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
+          ${sending ? `<div class="muted">${t('onSending')}</div>` : ''}
           ${err ? `<div class="warn">${esc(err)}</div>` : ''}
           <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
       }
@@ -1014,7 +1051,7 @@ const I18N = {
     aeNickTaken: 'Этот ник уже занят.', aeNickBad: 'Ник: 3–16 символов, латиница, цифры и _.', aeNickReserved: 'Этот ник занять нельзя.',
     aeDenied: 'Нет доступа. Возможно, аккаунт заблокирован.', aeOther: 'Ошибка: {e}',
     onNeedLogin: 'Чтобы играть онлайн, войдите или зарегистрируйтесь.', onBanned: 'Ваш аккаунт заблокирован: онлайн-игра недоступна.',
-    onVs: 'Соперник:', onWrongGame: 'этот код от другой игры', onFull: 'в этой игре уже двое игроков',
+    onVs: 'Соперник:', onSending: 'Отправляем ход…', onWrongGame: 'этот код от другой игры', onFull: 'в этой игре уже двое игроков',
     adTitle: 'Админ-панель', adRefresh: 'Обновить', adBack: 'К игре', adPlayersH: 'Игроки', adSearch: 'Поиск по нику', adLoading: 'Загрузка…',
     adPlayers: 'Игроков всего', adActive: 'Заходили за сутки', adBannedN: 'Заблокировано', adToday: 'Партий сегодня', adWeek: 'Партий за неделю', adMonth: 'Партий за 30 дней',
     adJoined: 'Регистрация', adSeen: 'Был в сети', adGames: 'Партий', adStatus: 'Статус', adBannedOne: 'бан', adActiveOne: 'активен',
@@ -1067,7 +1104,7 @@ const I18N = {
     aeNickTaken: 'This nickname is taken.', aeNickBad: 'Nickname: 3–16 characters, Latin letters, digits and _.', aeNickReserved: 'This nickname cannot be taken.',
     aeDenied: 'Access denied. The account may be banned.', aeOther: 'Error: {e}',
     onNeedLogin: 'Sign in or sign up to play online.', onBanned: 'Your account is banned: online play is unavailable.',
-    onVs: 'Opponent:', onWrongGame: 'this code belongs to the other game', onFull: 'this game already has two players',
+    onVs: 'Opponent:', onSending: 'Sending your move…', onWrongGame: 'this code belongs to the other game', onFull: 'this game already has two players',
     adTitle: 'Admin panel', adRefresh: 'Refresh', adBack: 'Back to the game', adPlayersH: 'Players', adSearch: 'Search by nickname', adLoading: 'Loading…',
     adPlayers: 'Players', adActive: 'Seen in the last 24 h', adBannedN: 'Banned', adToday: 'Games today', adWeek: 'Games this week', adMonth: 'Games in 30 days',
     adJoined: 'Signed up', adSeen: 'Last seen', adGames: 'Games', adStatus: 'Status', adBannedOne: 'banned', adActiveOne: 'active',
