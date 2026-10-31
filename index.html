@@ -371,6 +371,14 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 
   <div class="main" id="checkersApp" hidden>
     <div class="board-wrap">
+      <div class="review" id="ckReview" hidden>
+        <div class="rev-text" id="ckRevText"></div>
+        <div class="btns">
+          <button class="b" id="ckRevPrev" data-ta="prev" aria-label="Предыдущий ход">◀</button>
+          <button class="b" id="ckRevNext" data-ta="next" aria-label="Следующий ход">▶</button>
+          <button class="b primary" id="ckRevExit" data-t="exit">К текущей позиции</button>
+        </div>
+      </div>
       <div class="frame"><div class="board" id="ckBoard" role="grid" data-ta="ckBoardLbl" aria-label="Доска для шашек"></div></div>
     </div>
 
@@ -380,6 +388,11 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
         <div class="rating-note" id="ckRatingNote" aria-live="polite"></div>
         <div class="hint-note" id="ckHintNote" aria-live="polite"></div>
         <div class="tag" id="ckLeft"></div>
+      </div>
+
+      <div class="card" id="ckReport" hidden>
+        <div class="sheet-h"><h2 data-t="report">Отчёт партии</h2><small id="ckRepProg"></small></div>
+        <div id="ckRepBody"></div>
       </div>
 
       <div class="card">
@@ -1502,11 +1515,10 @@ function finishRated() {
   A().rate('chess', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
 }
 // ---------- Best-move hint (admin only) ----------
-// Full engine strength without the bot's randomness; using it makes the game unrated
+// Full engine strength without the bot's randomness
 let adminHint = null;
 function showHint() {
   if (!A() || !A().isAdmin() || thinking || gameResult().over || view !== null) return;
-  if (!rs.done && myRatedColor()) { rs.unrated = 'rtHint'; setNote(t('rtHint')); }
   $('hintNote').textContent = t('hintThinking');
   setTimeout(() => {
     const ply = history.length;
@@ -1644,7 +1656,7 @@ function renderReview() {
   let txt = `<b>${num} ${fmt(history[view].san)}</b>`;
   if (p) {
     txt += ` <span class="bdg ${p.cls}">${CLS[p.cls].s || '✓'}</span> ${t('cls')[p.cls][1]}`;
-    if (!p.isBest) txt += `<span class="hint">, ${t('better')} <b>${fmt(p.bestSan)}</b> (${t('greenBox')})</span>`;
+    if (!p.isBest && p.cls !== 'brill') txt += `<span class="hint">, ${t('better')} <b>${fmt(p.bestSan)}</b> (${t('greenBox')})</span>`;
   }
   $('revText').innerHTML = txt;
   $('revPrev').disabled = view <= 0;
@@ -1657,7 +1669,7 @@ function render() {
   const lastIdx = view === null ? history.length - 1 : view;
   const last = lastIdx >= 0 ? history[lastIdx].m : null;
   const liveHint = view === null && adminHint && adminHint.ply === history.length ? adminHint : null;
-  const bestHint = (view !== null && report && report.plies[view] && !report.plies[view].isBest ? report.plies[view].best : null) || liveHint;
+  const bestHint = (view !== null && report && report.plies[view] && !report.plies[view].isBest && report.plies[view].cls !== 'brill' ? report.plies[view].best : null) || liveHint;
   const chk = inCheck(B, B.turn) ? kingSq(B.b, B.turn) : -1;
   let html = '';
   for (let k = 0; k < 64; k++) {
@@ -2003,11 +2015,10 @@ function finishRated() {
   setNote(t('rtSaving'));
   A().rate('checkers', ratedOppElo(), score).then(r => setNote(noteFor(r, 'rtResult')));
 }
-// Best-move hint (admin only); using it makes the game unrated
+// Best-move hint (admin only)
 let adminHint = null;
 function showHint() {
   if (!A() || !A().isAdmin() || thinking || result().over) return;
-  if (!rs.done && myRatedColor()) { rs.unrated = 'rtHint'; setNote(t('rtHint')); }
   $('ckHintNote').textContent = t('hintThinking');
   setTimeout(() => {
     const ply = hist.length;
@@ -2051,8 +2062,116 @@ function result() {
   return { over: false, moves: ms };
 }
 
+// ---------- Post-game report ----------
+// Each move is compared with the engine's best one; the loss decides the mark
+const MARK = { brill: '!!', best: '★', good: '', inacc: '?!', mist: '?', blun: '??' };
+let report = null, anToken = 0, view = null;
+const clampV = v => Math.max(-2000, Math.min(2000, v));
+const samePath = (a, b) => a.path.join() === b.path.join();
+function classify(loss, sac, bestV) {
+  if (sac && loss <= 20 && bestV < 600) return 'brill';
+  if (loss <= 10) return 'best';
+  if (loss <= 60) return 'good';
+  if (loss <= 150) return 'inacc';
+  if (loss <= 300) return 'mist';
+  return 'blun';
+}
+function analyze() {
+  const token = ++anToken;
+  report = { plies: [], done: false };
+  let i = 0;
+  const step = () => {
+    if (token !== anToken) return;
+    if (i >= hist.length) { report.done = true; render(); return; }
+    const h = hist[i], ms = genMoves(h.b, h.turn);
+    let best = ms[0], bestV = -Infinity, playedV = null;
+    for (const m of ms) {
+      const v = clampV(-negamax(apply(h.b, m), opp(h.turn), 4, -Infinity, Infinity, 1));
+      if (v > bestV) { bestV = v; best = m; }
+      if (samePath(m, h.m)) playedV = v;
+    }
+    if (playedV === null) playedV = bestV;
+    const isBest = samePath(best, h.m), loss = isBest ? 0 : Math.max(0, bestV - playedV);
+    // A quiet move that hands over pieces and still holds up is a sacrifice, unless it is a plain
+    // one-for-one exchange: what counts is giving material away, or getting more back than was given
+    let sac = false;
+    const after = apply(h.b, h.m), replies = genMoves(after, opp(h.turn));
+    if (!h.m.caps.length && replies.length && replies[0].caps.length) {
+      const take = replies.reduce((x, y) => (y.caps.length > x.caps.length ? y : x));
+      const back = genMoves(apply(after, take), h.turn);
+      const got = back.length && back[0].caps.length ? Math.max(...back.map(x => x.caps.length)) : 0;
+      sac = got !== take.caps.length;
+    }
+    report.plies.push({ col: h.turn, loss, isBest, best: best.path, bestSan: notation(best), cls: classify(loss, sac, bestV) });
+    i++;
+    render();
+    setTimeout(step, 0);
+  };
+  render();
+  setTimeout(step, 30);
+}
+
+function renderReport() {
+  const el = $('ckReport');
+  if (!report) { el.hidden = true; return; }
+  el.hidden = false;
+  const n = hist.length, k = report.plies.length;
+  $('ckRepProg').textContent = report.done ? '' : t('analysis', { k, n });
+  const cnt = { w: {}, b: {} }, sum = { w: 0, b: 0 }, num = { w: 0, b: 0 };
+  for (const q of report.plies) {
+    cnt[q.col][q.cls] = (cnt[q.col][q.cls] || 0) + 1;
+    sum[q.col] += Math.min(q.loss, 1000); num[q.col]++;
+  }
+  const acc = c => (num[c] ? Math.round(100 * Math.exp(-sum[c] / num[c] / 200)) + '%' : '—');
+  let h = report.done ? '' : `<div class="bar"><i style="width:${n ? (100 * k / n) : 0}%"></i></div>`;
+  h += `<table class="rep"><thead><tr><th></th><th>${t('colW')}</th><th>${t('colB')}</th></tr></thead><tbody>`;
+  h += `<tr class="acc"><td>${t('acc')}</td><td>${acc('w')}</td><td>${acc('b')}</td></tr>`;
+  for (const key of Object.keys(MARK)) {
+    h += `<tr><td><span class="bdg ${key}">${MARK[key] || '✓'}</span>${t('cls')[key][0]}</td><td>${cnt.w[key] || 0}</td><td>${cnt.b[key] || 0}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  const moments = report.plies.map((q, i) => ({ ...q, i })).filter(q => q.cls === 'brill' || q.cls === 'blun' || q.cls === 'mist');
+  if (moments.length) {
+    h += `<div class="key"><h3>${t('key')} <small>${t('keyHint')}</small></h3>`;
+    for (const q of moments) {
+      const num = Math.floor(q.i / 2) + 1 + (q.i % 2 ? '…' : '.');
+      const hint = q.cls === 'brill' ? t('sacOk') : `${t('better')} ${q.bestSan} (−${(q.loss / 100).toFixed(1)})`;
+      h += `<button class="km${view === q.i ? ' on' : ''}" data-ply="${q.i}"><span class="bdg ${q.cls}">${MARK[q.cls]}</span><span><b>${num} ${hist[q.i].san}</b> ${t('cls')[q.cls][1]}, <span class="hint">${hint}</span></span></button>`;
+    }
+    h += '</div>';
+  } else if (report.done) {
+    h += `<div class="key"><h3>${t('key')}</h3><span class="hint">${t('clean')}</span></div>`;
+  }
+  $('ckRepBody').innerHTML = h;
+}
+
+// Reviewing a move shows the position right after it
+function showPly(i) {
+  if (i !== null && (i < 0 || i >= hist.length)) return;
+  if (i === hist.length - 1 && !result().over) i = null;
+  view = i; sel = null; targets = [];
+  render();
+}
+const boardAt = i => (i + 1 < hist.length ? hist[i + 1].b : S.b);
+function renderReview() {
+  const el = $('ckReview');
+  if (view === null) { el.hidden = true; return; }
+  el.hidden = false;
+  const q = report && report.plies[view];
+  const num = Math.floor(view / 2) + 1 + (view % 2 ? '…' : '.');
+  let txt = `<b>${num} ${hist[view].san}</b>`;
+  if (q) {
+    txt += ` <span class="bdg ${q.cls}">${MARK[q.cls] || '✓'}</span> ${t('cls')[q.cls][1]}`;
+    if (!q.isBest && q.cls !== 'brill') txt += `<span class="hint">, ${t('better')} <b>${q.bestSan}</b> (${t('greenBox')})</span>`;
+  }
+  $('ckRevText').innerHTML = txt;
+  $('ckRevPrev').disabled = view <= 0;
+  $('ckRevNext').disabled = view >= hist.length - 1;
+}
+
 function reset() {
   S = { b: initBoard(), turn: 'w', kc: 0 };
+  report = null; anToken++; view = null;
   hist = []; sel = null; targets = []; thinking = false;
   newRating(); setNote(''); adminHint = null;
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
@@ -2066,8 +2185,8 @@ function play(m, remote) {
   S.kc = m.caps.length || !kingMove ? 0 : S.kc + 1;
   S.turn = opp(S.turn);
   if (online() && !remote) net.push();
-  sel = null; targets = [];
-  if (result().over) finishRated();
+  sel = null; targets = []; view = null;
+  if (result().over) { finishRated(); analyze(); return; }
   render(); maybeAI();
 }
 
@@ -2085,6 +2204,7 @@ function undo() {
   if (thinking || !hist.length || online()) return;
   if (!rs.done) rs.unrated = 'rtUndo';
   setNote(t('rtUndo'));
+  report = null; anToken++; view = null;
   do { const h = hist.pop(); S.b = h.b; S.turn = h.turn; S.kc = h.kc; } while (hist.length && S.turn === aiColor());
   sel = null; targets = [];
   render(); maybeAI();
@@ -2092,6 +2212,7 @@ function undo() {
 
 function onSquare(i) {
   if (thinking) return;
+  if (view !== null) { showPly(null); return; }
   const res = result();
   if (res.over || S.turn === aiColor() || (online() && S.turn !== net.color())) return;
   const hit = targets.find(m => m.to === i);
@@ -2108,17 +2229,21 @@ function disc(p) {
 
 function render() {
   const res = result();
-  const last = hist.length ? hist[hist.length - 1].m : null;
-  const liveHint = adminHint && adminHint.ply === hist.length && !res.over ? adminHint : null;
+  const B = view === null ? S.b : boardAt(view);
+  const lastIdx = view === null ? hist.length - 1 : view;
+  const last = lastIdx >= 0 ? hist[lastIdx].m : null;
+  const liveHint = view === null && adminHint && adminHint.ply === hist.length && !res.over ? adminHint : null;
+  const reviewBest = view !== null && report && report.plies[view] && !report.plies[view].isBest && report.plies[view].cls !== 'brill' ? report.plies[view].best : null;
+  const framed = liveHint ? liveHint.path : reviewBest;
   const forced = !res.over && res.moves[0].caps.length > 0;
-  const mustFrom = forced && sel === null && S.turn !== aiColor() ? new Set(res.moves.map(m => m.from)) : new Set();
+  const mustFrom = view === null && forced && sel === null && S.turn !== aiColor() ? new Set(res.moves.map(m => m.from)) : new Set();
   let html = '';
   for (let k = 0; k < 64; k++) {
-    const i = flipped ? 63 - k : k, r = i >> 3, c = i & 7, p = S.b[i];
+    const i = flipped ? 63 - k : k, r = i >> 3, c = i & 7, p = B[i];
     const cls = ['sq'];
     if ((r + c) % 2) cls.push('d');
     if (last && last.path.includes(i)) cls.push('last');
-    if (liveHint && (i === liveHint.path[0] || i === liveHint.path[liveHint.path.length - 1])) cls.push('hint');
+    if (framed && (i === framed[0] || i === framed[framed.length - 1])) cls.push('hint');
     if (i === sel) cls.push('sel');
     if (mustFrom.has(i)) cls.push('must');
     if (targets.some(m => m.to === i)) cls.push('tgt');
@@ -2143,14 +2268,19 @@ function render() {
   const mv = $('ckMoves');
   if (!hist.length) mv.innerHTML = `<span class="empty">${t('empty')}</span>`;
   else {
+    const cell = i => {
+      const q = report && report.plies[i], mk = q && MARK[q.cls] ? `<span class="mk ${q.cls}">${MARK[q.cls]}</span>` : '';
+      return `<button class="mv${i === lastIdx ? ' cur' : ''}" data-ply="${i}">${hist[i].san}${mk}</button>`;
+    };
     let s = '';
     for (let i = 0; i < hist.length; i += 2) {
-      s += `<span class="n">${i / 2 + 1}.</span><span class="${i === hist.length - 1 ? 'cur' : ''}">${hist[i].san}</span>`;
-      s += hist[i + 1] ? `<span class="${i + 1 === hist.length - 1 ? 'cur' : ''}">${hist[i + 1].san}</span>` : '<span></span>';
+      s += `<span class="n">${i / 2 + 1}.</span>${cell(i)}${hist[i + 1] ? cell(i + 1) : '<span></span>'}`;
     }
     mv.innerHTML = s;
-    mv.scrollTop = mv.scrollHeight;
+    if (view === null) mv.scrollTop = mv.scrollHeight;
   }
+  renderReview();
+  renderReport();
   $('ckUndo').disabled = thinking || !hist.length || online();
   $('ckAiOpts').hidden = !(modeSel.value === 'ai' || online());
   levelSel.closest('label').hidden = online();
@@ -2159,7 +2289,7 @@ function render() {
   $('ckBotElo').textContent = t('rtBot', { e: BOT_ELO[levelSel.value] });
   $('ckRatingNote').innerHTML = ratingNote;
   $('ckHintBtn').hidden = !(A() && A().isAdmin());
-  $('ckHintBtn').disabled = thinking || res.over;
+  $('ckHintBtn').disabled = thinking || res.over || view !== null;
   $('ckHintNote').textContent = liveHint ? t('hintIs', { m: liveHint.text }) : '';
 }
 
@@ -2174,6 +2304,22 @@ $('ckNew').addEventListener('click', () => {
   if (online()) { round++; net.push(); }
 });
 $('ckUndo').addEventListener('click', undo);
+for (const id of ['ckMoves', 'ckRepBody']) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('[data-ply]');
+    if (b && !thinking) showPly(+b.dataset.ply);
+  });
+}
+$('ckRevPrev').addEventListener('click', () => showPly(view - 1));
+$('ckRevNext').addEventListener('click', () => showPly(view + 1));
+$('ckRevExit').addEventListener('click', () => showPly(null));
+document.addEventListener('keydown', e => {
+  if ($('checkersApp').hidden || e.target.closest('select, input') || !hist.length || thinking) return;
+  const cur = view === null ? hist.length - 1 : view;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); showPly(Math.max(0, cur - 1)); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); if (view !== null) showPly(view + 1 >= hist.length ? null : view + 1); }
+  else if (e.key === 'Escape' && view !== null) showPly(null);
+});
 $('ckFlip').addEventListener('click', () => { flipped = !flipped; render(); });
 if (!window.gambitNet.available) modeSel.querySelector('[value=online]').remove();
 modeSel.addEventListener('change', () => { abandonRated(); if (!online()) net.leave(); if (!thinking) reset(); });
