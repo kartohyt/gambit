@@ -257,6 +257,8 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 .hint-btn { border-color: #3fae4a; color: #3fae4a; }
 .hint-note { font-size: .9rem; font-weight: 600; color: #3fae4a; }
 .hint-note:empty { display: none; }
+.hint-note.brill { color: #1d9e98; }
+.sq.hint.hint-brill::after { border-color: #1d9e98; }
 /* Brilliant move: a lasting !! on the square and a label that pops up and fades */
 .brill-dot {
   position: absolute; top: 4%; right: 4%; z-index: 3; width: 34%; height: 34%; border-radius: 50%;
@@ -1054,7 +1056,7 @@ const I18N = {
     prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
-    fxBrill: 'Бриллиантовый ход!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
+    fxBrill: 'Бриллиантовый ход!', hintBrill: 'Бриллиантовый ход: {m} !!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
     rtFast: 'Партия без рейтинга: прошло меньше 15 секунд после прошлой.', rtFail: 'Не удалось сохранить рейтинг.',
@@ -1107,7 +1109,7 @@ const I18N = {
     prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
-    fxBrill: 'Brilliant move!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
+    fxBrill: 'Brilliant move!', hintBrill: 'Brilliant move: {m} !!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
     rtFast: 'Unrated game: less than 15 seconds since the last one.', rtFail: 'Could not save the rating.',
@@ -1630,14 +1632,36 @@ function popLabel(fxId, sq, isFlipped, html) {
 }
 
 let adminHint = null;
+// The strongest move that would count as brilliant here (same scoring as checkBrilliant), or null
+function findBrilliant(s) {
+  const scored = legal(s).map(x => {
+    make(s, x);
+    const v = clampV(-negamax(s, 2, -Infinity, Infinity, 1));
+    unmake(s);
+    return { x, v };
+  });
+  if (!scored.length) return null;
+  const bestV = Math.max(...scored.map(o => o.v));
+  let pick = null;
+  for (const o of scored) {
+    if (bestV - o.v > 20 || (pick && o.v <= pick.v)) continue;
+    make(s, o.x);
+    const sac = isSacrifice(s, o.x);
+    unmake(s);
+    if (sac && classify(bestV - o.v, true, bestV) === 'brill') pick = o;
+  }
+  return pick ? pick.x : null;
+}
 function showHint() {
   if (!A() || !A().isAdmin() || thinking || gameResult().over || view !== null) return;
   $('hintNote').textContent = t('hintThinking');
   setTimeout(() => {
     const ply = history.length;
-    const m = searchMove(G, G.b.filter(Boolean).length <= 10 ? 4 : 3, 0);
+    // A sacrifice the brilliance test accepts beats the plain best move
+    const brill = findBrilliant(G);
+    const m = brill || searchMove(G, G.b.filter(Boolean).length <= 10 ? 4 : 3, 0);
     if (!m || history.length !== ply) return;
-    adminHint = { ply, from: m.from, to: m.to, text: fmt(san(G, m, legal(G))) };
+    adminHint = { ply, from: m.from, to: m.to, text: fmt(san(G, m, legal(G))), brill: !!brill };
     render();
   }, 30);
 }
@@ -1793,6 +1817,7 @@ function render() {
     if ((r + c) % 2) cls.push('d');
     if (last && (i === last.from || i === last.to)) cls.push('last');
     if (bestHint && (i === bestHint.from || i === bestHint.to)) cls.push('hint');
+    if (liveHint && liveHint.brill && (i === liveHint.from || i === liveHint.to)) cls.push('hint-brill');
     if (i === sel) cls.push('sel');
     if (i === chk) cls.push('check');
     const t = targets.find(m => m.to === i);
@@ -1868,7 +1893,8 @@ function render() {
   $('ratingNote').innerHTML = ratingNote;
   $('hintBtn').hidden = !(A() && A().isAdmin());
   $('hintBtn').disabled = thinking || res.over || view !== null;
-  $('hintNote').textContent = liveHint && !res.over ? t('hintIs', { m: liveHint.text }) : '';
+  $('hintNote').textContent = liveHint && !res.over ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
+  $('hintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
   renderReport();
 }
 
@@ -2181,14 +2207,27 @@ function popLabel(fxId, sq, isFlipped, html) {
 }
 
 let adminHint = null;
+// The strongest move that would count as brilliant here (same scoring as checkBrilliant), or null
+function findBrilliant(b, col) {
+  const scored = genMoves(b, col).map(x => ({ x, v: clampV(-negamax(apply(b, x), opp(col), 4, -Infinity, Infinity, 1)) }));
+  if (!scored.length) return null;
+  const bestV = Math.max(...scored.map(o => o.v));
+  let pick = null;
+  for (const o of scored) {
+    if (bestV - o.v > 20 || (pick && o.v <= pick.v)) continue;
+    if (isCkSacrifice(b, o.x, col) && classify(bestV - o.v, true, bestV) === 'brill') pick = o;
+  }
+  return pick ? pick.x : null;
+}
 function showHint() {
   if (!A() || !A().isAdmin() || thinking || result().over) return;
   $('ckHintNote').textContent = t('hintThinking');
   setTimeout(() => {
     const ply = hist.length;
-    const m = searchMove(S.b, S.turn, 7, 0);
+    const brill = findBrilliant(S.b, S.turn);
+    const m = brill || searchMove(S.b, S.turn, 7, 0);
     if (!m || hist.length !== ply) return;
-    adminHint = { ply, path: m.path, text: notation(m) };
+    adminHint = { ply, path: m.path, text: notation(m), brill: !!brill };
     render();
   }, 30);
 }
@@ -2402,6 +2441,7 @@ function render() {
     if ((r + c) % 2) cls.push('d');
     if (last && last.path.includes(i)) cls.push('last');
     if (framed && (i === framed[0] || i === framed[framed.length - 1])) cls.push('hint');
+    if (liveHint && liveHint.brill && framed === liveHint.path && (i === framed[0] || i === framed[framed.length - 1])) cls.push('hint-brill');
     if (i === sel) cls.push('sel');
     if (mustFrom.has(i)) cls.push('must');
     if (targets.some(m => m.to === i)) cls.push('tgt');
@@ -2454,7 +2494,8 @@ function render() {
   $('ckRatingNote').innerHTML = ratingNote;
   $('ckHintBtn').hidden = !(A() && A().isAdmin());
   $('ckHintBtn').disabled = thinking || res.over || view !== null;
-  $('ckHintNote').textContent = liveHint ? t('hintIs', { m: liveHint.text }) : '';
+  $('ckHintNote').textContent = liveHint ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
+  $('ckHintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
 }
 
 boardEl.addEventListener('click', e => {
