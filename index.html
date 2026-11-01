@@ -587,14 +587,17 @@ window.gambitAuth = (() => {
     const c = m ? m[1].toLowerCase() : '';
     return COUNTRIES.includes(c) ? c : '';
   }
-  // Standard Elo: K = 40 for the first 20 games, then 20. Against a bot a win is worth at least
-  // `floor` points (it grows with the bot's strength), so every bot is worth beating.
+  // Standard Elo: K = 40 for the first 20 games, then 20. Against a bot (`floor` > 0) any gain is
+  // worth half as much again and a win is worth at least `floor`, which grows with the bot's
+  // strength; losses stay as they are. Never more than 40, the cap the database rules enforce.
   function eloDelta(game, oppElo, score, floor) {
     const old = eloOf(profile, game), n = ratedOf(profile, game);
     const K = n < 20 ? 40 : 20;
     const expected = 1 / (1 + Math.pow(10, (oppElo - old) / 400));
     let d = Math.round(K * (score - expected));
+    if (floor && d > 0) d = Math.round(d * 1.5);
     if (score === 1 && floor) d = Math.max(d, floor);
+    d = Math.min(40, d);
     return Math.max(100, Math.min(3500, old + d)) - old;
   }
   async function rate(game, oppElo, score, floor = 0) {
@@ -1916,8 +1919,8 @@ function myRatedColor() {
   return rs.mode === 'ai' ? rs.side : null;
 }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
-// Smallest win against a bot: 2 for the 400 bot up to 8 for the 2000 bot
-const botFloor = elo => Math.round(elo / 250);
+// Smallest win against a bot: 4 for the 400 bot up to 20 for the 2000 bot
+const botFloor = elo => Math.round(elo / 100);
 const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
 function noteFor(r, key) {
   if (!r) return '';
@@ -2577,8 +2580,8 @@ let rs = {}, ratingNote = '';
 function newRating() { rs = { mode: modeSel.value, side: sideSel.value, level: levelSel.value, unrated: '', done: false }; }
 function myRatedColor() { return rs.mode === 'online' ? net.color() : rs.mode === 'ai' ? rs.side : null; }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
-// Smallest win against a bot: 2 for the 400 bot up to 8 for the 2000 bot
-const botFloor = elo => Math.round(elo / 250);
+// Smallest win against a bot: 4 for the 400 bot up to 20 for the 2000 bot
+const botFloor = elo => Math.round(elo / 100);
 const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
 function noteFor(r, key) {
   if (!r) return '';
