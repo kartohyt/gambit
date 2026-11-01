@@ -384,6 +384,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b" id="resignBtn" data-t="resign">Сдаться</button>
           <button class="b hint-btn" id="hintBtn" data-t="hintBtn" hidden>Лучший ход</button>
           <button class="b auto-btn" id="autoBtn" aria-pressed="false" hidden>Автоход</button>
+          <button class="b auto-btn" id="autoFastBtn" aria-pressed="false" hidden>⚡ Быстро</button>
         </div>
       </div>
 
@@ -473,6 +474,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b" id="ckFlip" data-t="flip">Перевернуть</button>
           <button class="b hint-btn" id="ckHintBtn" data-t="hintBtn" hidden>Лучший ход</button>
           <button class="b auto-btn" id="ckAutoBtn" aria-pressed="false" hidden>Автоход</button>
+          <button class="b auto-btn" id="ckAutoFastBtn" aria-pressed="false" hidden>⚡ Быстро</button>
         </div>
       </div>
 
@@ -1246,7 +1248,7 @@ const I18N = {
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
     bdLabel: 'Доска', bdSteel: 'Сталь', bdWood: 'Дерево', bdGreen: 'Турнир', bdMarble: 'Мрамор', bdOcean: 'Океан', bdRose: 'Роза',
-    autoOn: 'Автоход: вкл', autoOff: 'Автоход: выкл', autoThinking: 'Автоход думает…',
+    autoOn: 'Автоход: вкл', autoOff: 'Автоход: выкл', autoThinking: 'Автоход думает…', autoFast: '⚡ Быстро',
     fxBrill: 'Бриллиантовый ход!', hintBrill: 'Бриллиантовый ход: {m} !!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
@@ -1307,7 +1309,7 @@ const I18N = {
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
     bdLabel: 'Board', bdSteel: 'Steel', bdWood: 'Wood', bdGreen: 'Tournament', bdMarble: 'Marble', bdOcean: 'Ocean', bdRose: 'Rose',
-    autoOn: 'Auto-move: on', autoOff: 'Auto-move: off', autoThinking: 'Auto-move is thinking…',
+    autoOn: 'Auto-move: on', autoOff: 'Auto-move: off', autoThinking: 'Auto-move is thinking…', autoFast: '⚡ Fast',
     fxBrill: 'Brilliant move!', hintBrill: 'Brilliant move: {m} !!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
@@ -2032,6 +2034,17 @@ function showHint() {
 // ---------- Auto-move (admin only) ----------
 // When on, the strong hint search plays the admin's side: their colour against the bot or online
 let autoOn = false, autoBusy = false;
+// Fast mode: a quarter-second search and no pause before the move.
+// One switch for both games, kept on window and remembered in the browser.
+if (window.gambitAutoFast === undefined) {
+  try { window.gambitAutoFast = localStorage.getItem('gambit-auto-fast') === '1'; } catch (e) { window.gambitAutoFast = false; }
+}
+const isAutoFast = () => window.gambitAutoFast;
+function toggleAutoFast() {
+  window.gambitAutoFast = !window.gambitAutoFast;
+  try { localStorage.setItem('gambit-auto-fast', window.gambitAutoFast ? '1' : '0'); } catch (e) {}
+  render();
+}
 const autoColor = () => (modeSel.value === 'online' ? net.color() : modeSel.value === 'ai' ? sideSel.value : null);
 function maybeAuto() {
   if (!autoOn || autoBusy || thinking || pendingPromo || view !== null || !A() || !A().isAdmin()) return;
@@ -2040,11 +2053,11 @@ function maybeAuto() {
   render();
   const ply = history.length;
   setTimeout(() => {
-    const r = autoOn && history.length === ply && !gameResult().over ? deepSearch(G, 1200) : null;
+    const r = autoOn && history.length === ply && !gameResult().over ? deepSearch(G, isAutoFast() ? 250 : 1200) : null;
     autoBusy = false;
     const m = r && r.move && legal(G).find(x => sameMove(x, r.move));
     if (m && history.length === ply && autoOn) play(m); else render();
-  }, 250);
+  }, isAutoFast() ? 20 : 250);
 }
 
 // Leaving a rated game half-way counts as a loss, so nobody dodges a bad position
@@ -2278,6 +2291,9 @@ function render() {
   $('autoBtn').hidden = !(A() && A().isAdmin()) || modeSel.value === 'pvp';
   $('autoBtn').textContent = t(autoOn ? 'autoOn' : 'autoOff');
   $('autoBtn').setAttribute('aria-pressed', String(autoOn));
+  $('autoFastBtn').hidden = $('autoBtn').hidden;
+  $('autoFastBtn').textContent = t('autoFast');
+  $('autoFastBtn').setAttribute('aria-pressed', String(isAutoFast()));
   $('hintNote').textContent = liveHint && !res.over ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
   $('hintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
   renderReport();
@@ -2305,6 +2321,7 @@ $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
 $('resignBtn').addEventListener('click', resign);
 $('hintBtn').addEventListener('click', showHint);
 $('autoBtn').addEventListener('click', () => { autoOn = !autoOn; render(); maybeAuto(); });
+$('autoFastBtn').addEventListener('click', toggleAutoFast);
 window.gambitAuth.onChange(() => render());
 function applyLang() {
   document.documentElement.lang = lang;
@@ -2682,6 +2699,17 @@ function showHint() {
 }
 // Auto-move (admin only): the strong hint search plays the admin's side
 let autoOn = false, autoBusy = false;
+// Fast mode: a quarter-second search and no pause before the move.
+// One switch for both games, kept on window and remembered in the browser.
+if (window.gambitAutoFast === undefined) {
+  try { window.gambitAutoFast = localStorage.getItem('gambit-auto-fast') === '1'; } catch (e) { window.gambitAutoFast = false; }
+}
+const isAutoFast = () => window.gambitAutoFast;
+function toggleAutoFast() {
+  window.gambitAutoFast = !window.gambitAutoFast;
+  try { localStorage.setItem('gambit-auto-fast', window.gambitAutoFast ? '1' : '0'); } catch (e) {}
+  render();
+}
 const autoColor = () => (modeSel.value === 'online' ? net.color() : modeSel.value === 'ai' ? sideSel.value : null);
 function maybeAuto() {
   if (!autoOn || autoBusy || thinking || view !== null || !A() || !A().isAdmin()) return;
@@ -2690,10 +2718,10 @@ function maybeAuto() {
   render();
   const ply = hist.length;
   setTimeout(() => {
-    const r = autoOn && hist.length === ply && !result().over ? deepSearchCk(S.b, S.turn, 1200) : null;
+    const r = autoOn && hist.length === ply && !result().over ? deepSearchCk(S.b, S.turn, isAutoFast() ? 250 : 1200) : null;
     autoBusy = false;
     if (r && r.move && hist.length === ply && autoOn) play(r.move); else render();
-  }, 250);
+  }, isAutoFast() ? 20 : 250);
 }
 function abandonRated() {
   const me = myRatedColor();
@@ -2961,6 +2989,9 @@ function render() {
   $('ckAutoBtn').hidden = !(A() && A().isAdmin()) || modeSel.value === 'pvp';
   $('ckAutoBtn').textContent = t(autoOn ? 'autoOn' : 'autoOff');
   $('ckAutoBtn').setAttribute('aria-pressed', String(autoOn));
+  $('ckAutoFastBtn').hidden = $('ckAutoBtn').hidden;
+  $('ckAutoFastBtn').textContent = t('autoFast');
+  $('ckAutoFastBtn').setAttribute('aria-pressed', String(isAutoFast()));
   $('ckHintNote').textContent = liveHint ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
   $('ckHintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
 }
@@ -3004,6 +3035,7 @@ levelSel.addEventListener('change', () => {
 document.addEventListener('gambit-lang', render);
 $('ckHintBtn').addEventListener('click', showHint);
 $('ckAutoBtn').addEventListener('click', () => { autoOn = !autoOn; render(); maybeAuto(); });
+$('ckAutoFastBtn').addEventListener('click', toggleAutoFast);
 window.gambitAuth.onChange(() => render());
 
 // ---------- Game switch ----------
