@@ -295,6 +295,76 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 :root[data-board="marble"] { --sq-light: #e6e6e1; --sq-dark: #9b9a93; --frame: #3b3b38; }
 :root[data-board="ocean"] { --sq-light: #d5edf2; --sq-dark: #3d8ca1; --frame: #173f4a; }
 :root[data-board="rose"] { --sq-light: #f5e1e5; --sq-dark: #c47d8e; --frame: #57303b; }
+/* Header tools: daily puzzle, leaders, friends, sound */
+.tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tools .b { padding: 5px 10px; font-size: .85rem; }
+.modal-box.wide { width: min(620px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
+.lb { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.lb td { padding: 6px; border-top: 1px solid var(--line); }
+.lb td.rk { color: var(--muted); font-family: var(--f-mono); width: 2.5em; }
+.lb tr.me td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.lb td.r { text-align: right; white-space: nowrap; }
+.lb .b { padding: 2px 9px; }
+.hlist { display: grid; gap: 4px; max-height: 340px; overflow-y: auto; }
+.hrow { font: inherit; color: inherit; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: center; }
+.hrow:hover, .hrow:focus-visible { border-color: var(--accent); outline: none; }
+.hrow .hs { font-size: .78rem; color: var(--muted); grid-column: 1 / -1; }
+.hrow .up { color: #4f9a35; font-weight: 600; }
+.hrow .down { color: var(--danger); font-weight: 600; }
+.res { font-weight: 700; font-size: .75rem; padding: 2px 7px; border-radius: 999px; color: #fff; }
+.res.win { background: #4f9a35; }
+.res.loss { background: var(--danger); }
+.res.draw { background: #8a95a6; }
+.fl { display: grid; gap: 6px; }
+.frow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 6px; }
+.frow .b { padding: 4px 9px; font-size: .8rem; }
+.seen { font-size: .75rem; color: var(--muted); margin-left: 4px; }
+.seen.on { color: #4f9a35; font-weight: 600; }
+.inline-form { display: flex; gap: 8px; }
+.inline-form input { flex: 1; min-width: 0; font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.inline-form input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+/* Online: clocks, offers and quick chat */
+.online select { font: inherit; font-size: .9rem; }
+.clocks { display: grid; gap: 4px; }
+.clk { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font-size: .85rem; }
+.clk b { font-family: var(--f-mono); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.clk.run { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.clk.low b { color: var(--danger); }
+.chat { display: grid; gap: 2px; font-size: .84rem; }
+.chat .cm { color: var(--muted); }
+.chat .cm b { color: var(--fg); font-weight: 600; }
+.phrases { display: flex; flex-wrap: wrap; gap: 4px; }
+.phrases .b { padding: 3px 8px; font-size: .78rem; font-weight: 500; }
+.offer { background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 6px; padding: 8px; display: grid; gap: 6px; font-size: .88rem; font-weight: 600; }
+/* Toasts and confetti */
+.toasts { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 60; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }
+.toast { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .3); display: grid; gap: 8px; font-size: .9rem; animation: toastin .2s ease-out; }
+@keyframes toastin { from { opacity: 0; transform: translateY(8px); } }
+.confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 70; }
+/* Daily puzzle */
+.puzzle-bar { display: grid; gap: 8px; padding: 10px; border-radius: 6px; border: 1px solid #1d9e98; background: color-mix(in srgb, #1d9e98 12%, transparent); }
+.puzzle-bar .pt { font-weight: 600; font-family: var(--f-display); font-size: .95rem; }
+.puzzle-bar .pm { font-size: .88rem; }
+.puzzle-bar .pm.bad { color: var(--danger); font-weight: 600; }
+.puzzle-bar .pm.good { color: #2f8a3a; font-weight: 600; }
+/* Piece sets: they recolour the same drawings */
+:root[data-pieces="neon"] .pc.w, :root[data-pieces="neon"] .ck.w { fill: #0f1d2a; stroke: #46e0ff; filter: drop-shadow(0 0 3px rgba(70, 224, 255, .8)); }
+:root[data-pieces="neon"] .pc.b, :root[data-pieces="neon"] .ck.b { fill: #24102a; stroke: #ff5ccf; filter: drop-shadow(0 0 3px rgba(255, 92, 207, .8)); }
+:root[data-pieces="neon"] .pc.w .ln, :root[data-pieces="neon"] .ck.w .ln { stroke: #46e0ff; }
+:root[data-pieces="neon"] .pc.b .ln, :root[data-pieces="neon"] .ck.b .ln { stroke: #ff5ccf; }
+:root[data-pieces="neon"] .pc.w .eye { fill: #46e0ff; }
+:root[data-pieces="neon"] .pc.b .eye { fill: #ff5ccf; }
+:root[data-pieces="gold"] .pc.w, :root[data-pieces="gold"] .ck.w { fill: #f2d37c; stroke: #6f4f0d; }
+:root[data-pieces="gold"] .pc.b, :root[data-pieces="gold"] .ck.b { fill: #9aa3b1; stroke: #262d38; }
+:root[data-pieces="gold"] .pc.b .ln, :root[data-pieces="gold"] .ck.b .ln { stroke: #262d38; }
+:root[data-pieces="gold"] .ck.w .ln { stroke: #b48a26; }
+:root[data-pieces="gold"] .pc.w .eye { fill: #6f4f0d; }
+:root[data-pieces="gold"] .pc.b .eye { fill: #262d38; }
+:root[data-pieces="flat"] .pc, :root[data-pieces="flat"] .ck { filter: none; }
+:root[data-pieces="flat"] .pc.w, :root[data-pieces="flat"] .ck.w { fill: #ffffff; stroke: #000; }
+:root[data-pieces="flat"] .pc.b, :root[data-pieces="flat"] .ck.b { fill: #000; stroke: #000; }
+:root[data-pieces="flat"] .pc.b .ln, :root[data-pieces="flat"] .ck.b .ln { stroke: #fff; }
+:root[data-pieces="flat"] .pc.b .eye { fill: #fff; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -311,6 +381,12 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
     </nav>
     <div class="tag" data-t="tag">Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки</div>
     <div class="acct" id="acct" hidden></div>
+    <div class="tools">
+      <button class="b" id="puzzleBtn" hidden>🧩</button>
+      <button class="b" id="lbBtn" data-t="lbBtn" hidden>🏆 Лидеры</button>
+      <button class="b" id="friendsBtn" data-t="frBtn" hidden>👥 Друзья</button>
+      <button class="b" id="soundBtn" data-ta="sndLbl" aria-label="Звук" aria-pressed="true">🔊</button>
+    </div>
     <label class="board-pick" for="boardTheme"><span data-t="bdLabel">Доска</span>
       <select id="boardTheme">
         <option value="steel" data-t="bdSteel">Сталь</option>
@@ -319,6 +395,14 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
         <option value="marble" data-t="bdMarble">Мрамор</option>
         <option value="ocean" data-t="bdOcean">Океан</option>
         <option value="rose" data-t="bdRose">Роза</option>
+      </select>
+    </label>
+    <label class="board-pick" for="pieceSet"><span data-t="pcLabel">Фигуры</span>
+      <select id="pieceSet">
+        <option value="classic" data-t="pcClassic">Классика</option>
+        <option value="neon" data-t="pcNeon">Неон</option>
+        <option value="gold" data-t="pcGold">Золото и серебро</option>
+        <option value="flat" data-t="pcFlat">Контраст</option>
       </select>
     </label>
     <div class="lang" role="group" aria-label="Язык / Language">
@@ -345,6 +429,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
         <div class="status" id="status" aria-live="polite"></div>
         <div class="rating-note" id="ratingNote" aria-live="polite"></div>
         <div class="hint-note" id="hintNote" aria-live="polite"></div>
+        <div class="puzzle-bar" id="puzzleBar" aria-live="polite" hidden></div>
         <div class="caps">
           <div id="capTop"></div>
           <div id="capBot"></div>
@@ -414,6 +499,10 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
       <label class="field" for="adminSearch"><span data-t="adSearch">Поиск по нику</span><input id="adminSearch" type="search" autocomplete="off"></label>
       <div class="table-wrap"><table class="users" id="adminUsers"></table></div>
     </div>
+    <div class="card">
+      <div class="sheet-h"><h2 data-t="adLiveH">Идущие партии</h2></div>
+      <div id="adminLive"></div>
+    </div>
   </section>
 
   <div class="main" id="checkersApp" hidden>
@@ -472,6 +561,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b primary" id="ckNew" data-t="newg">Новая партия</button>
           <button class="b" id="ckUndo" data-t="undo">Отменить ход</button>
           <button class="b" id="ckFlip" data-t="flip">Перевернуть</button>
+          <button class="b" id="ckResign" data-t="resign">Сдаться</button>
           <button class="b hint-btn" id="ckHintBtn" data-t="hintBtn" hidden>Лучший ход</button>
           <button class="b auto-btn" id="ckAutoBtn" aria-pressed="false" hidden>Автоход</button>
           <button class="b auto-btn" id="ckAutoFastBtn" aria-pressed="false" hidden>⚡ Быстро</button>
@@ -494,6 +584,10 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 <div class="modal" id="authModal" hidden>
   <div class="modal-box" id="authBox" role="dialog" aria-modal="true" aria-labelledby="authTitle"></div>
 </div>
+<div class="modal" id="xModal" hidden>
+  <div class="modal-box wide" id="xBox" role="dialog" aria-modal="true" aria-labelledby="xTitle"></div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 // ---------- Accounts and the admin panel (Firebase Auth + Firestore) ----------
@@ -603,6 +697,51 @@ window.gambitAuth = (() => {
     d = Math.max(-ELO_CAP, Math.min(ELO_CAP, d));
     return Math.max(100, Math.min(3500, old + d)) - old;
   }
+  // ---------- Public leaderboard entry ----------
+  // A copy of the rating, nick and flag that anyone may read; the rules check it against the profile
+  async function syncLeader() {
+    if (!user || !profile || profile.banned) return;
+    const elo = { chess: eloOf(profile, 'chess'), checkers: eloOf(profile, 'checkers') };
+    const rated = { chess: ratedOf(profile, 'chess'), checkers: ratedOf(profile, 'checkers') };
+    try { await db.collection('leaders').doc(user.uid).set({ nick: profile.nick, country: profile.country || '', admin, elo, rated, seen: ts() }); } catch (e) {}
+  }
+
+  // ---------- Game history ----------
+  // A finished game against the bot or online, saved with the rating change once it is known
+  async function record(entry, ratePromise) {
+    if (!user || !profile) return null;
+    const r = ratePromise ? await ratePromise.catch(() => null) : null;
+    // Firestore refuses undefined fields, so drop them
+    const doc = { ...JSON.parse(JSON.stringify(entry)), delta: r && typeof r.delta === 'number' ? r.delta : null, eloAfter: r && typeof r.next === 'number' ? r.next : null, at: ts(), acc: null, top: null };
+    try { histList = null; return await db.collection('users').doc(user.uid).collection('history').add(doc); } catch (e) { return null; }
+  }
+  // The report's accuracy and share of best moves, added when the analysis is done
+  function recordAcc(refPromise, acc, top) {
+    Promise.resolve(refPromise).then(ref => { if (ref) ref.update({ acc, top }).catch(() => {}); });
+  }
+  let histList = null;
+  async function loadHistory() {
+    if (!user) return;
+    histList = 'loading';
+    try {
+      const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('at', 'desc').limit(30).get();
+      histList = snap.docs.map(d => d.data());
+    } catch (e) { histList = []; }
+    if (mode === 'profile' && !$('authModal').hidden) drawModal();
+  }
+  function historyHTML() {
+    if (!Array.isArray(histList)) return `<div class="hint">${t('adLoading')}</div>`;
+    if (!histList.length) return `<div class="hint">${t('hiNone')}</div>`;
+    return '<div class="hlist">' + histList.map((h, i) => {
+      const o = h.opp || {};
+      const who = o.bot ? esc(t('hiBot', { l: t(o.bot), e: o.elo })) : badge({ nick: o.nick || '?', elo: o.elo, country: o.country, admin: o.admin });
+      const d = typeof h.delta !== 'number' ? '' : h.delta > 0 ? `<span class="up">+${h.delta}</span>` : h.delta < 0 ? `<span class="down">${h.delta}</span>` : '±0';
+      return `<button type="button" class="hrow" data-h="${i}"><span class="res ${esc(h.result)}">${t('hi_' + h.result)}</span>`
+        + `<span>${h.game === 'checkers' ? '⛀' : '♞'} ${who}</span><span>${d}</span>`
+        + `<span class="hs">${fmtDate(h.at)} · ${t(h.mode === 'online' ? 'hiOnline' : 'hiAi')}${typeof h.acc === 'number' ? ' · ' + t('acc') + ' ' + h.acc + '%' : ''} · ${t('hiOpen')}</span></button>`;
+    }).join('') + '</div>';
+  }
+
   async function rate(game, oppElo, score, floor = 0, boost = 1.5) {
     if (!(user && profile && !profile.banned)) return null;
     const old = eloOf(profile, game), n = ratedOf(profile, game);
@@ -612,7 +751,7 @@ window.gambitAuth = (() => {
     try {
       await db.collection('users').doc(user.uid).update({ elo, rated, lastRated: ts() });
       profile.elo = elo; profile.rated = rated;
-      renderAcct(); emit();
+      renderAcct(); emit(); syncLeader();
       return { old, next, delta: next - old };
     } catch (e) {
       return { error: e.code === 'permission-denied' ? 'fast' : 'fail' };
@@ -647,6 +786,7 @@ window.gambitAuth = (() => {
   function closeModal() { $('authModal').hidden = true; }
   function drawModal() {
     const box = $('authBox');
+    box.classList.toggle('wide', mode === 'profile');
     const tabs = mode === 'nick' || mode === 'profile' || mode === 'verify' ? '' : `<div class="tabs" role="tablist">
         <button class="b" role="tab" data-m="login" aria-selected="${mode === 'login'}">${t('acLogin')}</button>
         <button class="b" role="tab" data-m="register" aria-selected="${mode === 'register'}">${t('acRegister')}</button></div>`;
@@ -669,7 +809,7 @@ window.gambitAuth = (() => {
         <button class="b primary" ${busy ? 'disabled' : ''}>${busy ? '…' : label}</button>
         ${mode === 'login' ? `<button type="button" class="linkbtn" data-a="reset">${t('acForgot')}</button>` : ''}
         ${mode === 'verify' ? `<button type="button" class="linkbtn" data-a="resend">${t('vfResend')}</button>` : ''}
-      </form>`;
+      </form>${mode === 'profile' ? `<div class="sheet-h"><h2>${t('hiTitle')}</h2></div>${historyHTML()}` : ''}`;
   }
   async function submit() {
     // Read the form before redrawing it: the redraw replaces the inputs
@@ -685,6 +825,8 @@ window.gambitAuth = (() => {
     try {
       if (mode === 'login') {
         await auth.signInWithEmailAndPassword(email, pass);
+        // The sign-in event loads the profile too, but not necessarily before we get here
+        await loadProfile(auth.currentUser);
       } else if (mode === 'register') {
         checkNick(nick);
         const taken = await db.collection('nicks').doc(nick.toLowerCase()).get();
@@ -701,6 +843,7 @@ window.gambitAuth = (() => {
       } else if (mode === 'profile') {
         await db.collection('users').doc(user.uid).update({ country });
         profile.country = country;
+        syncLeader();
         busy = false; msg = t('acSaved'); msgOk = true; drawModal(); keep(); renderAcct(); emit();
         return;
       } else {
@@ -756,7 +899,7 @@ window.gambitAuth = (() => {
   }
 
   // ---------- Admin panel ----------
-  let users = [], adminQuery = '';
+  let users = [], adminQuery = '', flags = {};
   const fmtDate = d => (d && d.toDate ? d.toDate().toLocaleString(document.documentElement.lang === 'en' ? 'en-GB' : 'ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
   async function openAdmin() {
     if (!admin) return;
@@ -781,27 +924,81 @@ window.gambitAuth = (() => {
         [t('adToday'), since(day)], [t('adWeek'), since(week)], [t('adMonth'), games.length],
         [t('gChess'), games.filter(g => g.game === 'chess').length], [t('gCheckers'), games.filter(g => g.game === 'checkers').length]
       ];
+      flags = await loadFlags(users);
+      tiles.push([t('adSuspect'), Object.entries(flags).filter(([id, f]) => f.why.length && id !== user.uid).length]);
       $('adminStats').innerHTML = tiles.map(([k, v]) => `<div class="tile"><div class="tv">${v}</div><div class="tk">${esc(k)}</div></div>`).join('');
       drawUsers();
+      loadLive();
     } catch (e) {
       $('adminStats').innerHTML = `<div class="warn">${esc(errText(e))}</div>`;
     }
   }
+  // Signs of engine help, from the saved games: very high accuracy, mostly engine moves, a fast climb
+  async function loadFlags(list) {
+    let docs = [];
+    try { docs = (await db.collectionGroup('history').limit(3000).get()).docs; }
+    catch (e) {
+      const per = await Promise.all(list.slice(0, 300).map(u => db.collection('users').doc(u.id).collection('history')
+        .orderBy('at', 'desc').limit(40).get().then(sn => sn.docs, () => [])));
+      docs = per.flat();
+    }
+    const by = {}, weekAgo = Date.now() - 7 * 864e5;
+    for (const d of docs) {
+      const uid = d.ref.parent.parent.id, h = d.data(), st = by[uid] || (by[uid] = { acc: [], top: [], week: 0 });
+      if (typeof h.acc === 'number') st.acc.push(h.acc);
+      if (typeof h.top === 'number') st.top.push(h.top);
+      if (typeof h.delta === 'number' && h.at && h.at.toMillis && h.at.toMillis() > weekAgo) st.week += h.delta;
+    }
+    const avg = a => a.reduce((x, y) => x + y, 0) / a.length, out = {};
+    for (const [uid, st] of Object.entries(by)) {
+      const why = [];
+      if (st.acc.length >= 4 && avg(st.acc) >= 90) why.push(t('chAcc', { n: Math.round(avg(st.acc)) }));
+      if (st.top.length >= 4 && avg(st.top) >= 75) why.push(t('chTop', { n: Math.round(avg(st.top)) }));
+      if (st.week >= 250) why.push(t('chWeek', { n: st.week }));
+      out[uid] = { why, acc: st.acc.length ? Math.round(avg(st.acc)) : null };
+    }
+    return out;
+  }
+  function checkCell(u) {
+    const f = flags[u.id];
+    if (f && f.why.length && u.id !== user.uid) return `<span class="pill bad" title="${esc(f.why.join(', '))}">⚠ ${esc(f.why.join(', '))}</span>`;
+    return `<span class="hint">${f && f.acc != null ? esc(t('acc')) + ' ' + f.acc + '%' : '—'}</span>`;
+  }
+  async function loadLive() {
+    const el = $('adminLive');
+    el.innerHTML = `<div class="hint">${t('adLoading')}</div>`;
+    try {
+      const snap = await db.collection('games').where('updatedAt', '>=', new Date(Date.now() - 30 * 60000)).get();
+      const live = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(g => g.guest && !g.resigned && !(g.end && g.end.round === (g.round || 0)) && g.updatedAt && g.updatedAt.toMillis)
+        .sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
+      el.innerHTML = live.length ? '<div class="table-wrap"><table class="users"><tbody>' + live.map(g => `<tr>
+          <td>${t(g.game === 'checkers' ? 'gCheckers' : 'gChess')}</td>
+          <td class="nick">${badge({ nick: g.hostNick, elo: g.hostElo, country: g.hostCountry, admin: g.hostAdmin })} — ${badge({ nick: g.guestNick, elo: g.guestElo, country: g.guestCountry, admin: g.guestAdmin })}</td>
+          <td class="num">${t('adMoves', { n: (g.moves || []).length })}</td><td class="hint">${esc(g.tc || '')}</td>
+          <td><button class="b" data-watch="${esc(g.id)}" data-wg="${esc(g.game)}">${t('adWatch')}</button></td></tr>`).join('') + '</tbody></table></div>'
+        : `<div class="hint">${t('adNoLive')}</div>`;
+    } catch (e) { el.innerHTML = `<div class="warn">${esc(errText(e))}</div>`; }
+  }
   function drawUsers() {
     const q = adminQuery.toLowerCase();
-    const rows = users.filter(u => !q || (u.nickLower || '').includes(q));
-    $('adminUsers').innerHTML = `<thead><tr><th>${t('acNick')}</th><th>${t('adJoined')}</th><th>${t('adSeen')}</th><th>${t('adGames')}</th><th>${t('adElo')}</th><th>${t('adStatus')}</th><th></th></tr></thead><tbody>`
+    const sus = u => (flags[u.id] && flags[u.id].why.length && u.id !== user.uid ? 1 : 0);
+    const rows = users.filter(u => !q || (u.nickLower || '').includes(q)).sort((a, b) => sus(b) - sus(a));
+    $('adminUsers').innerHTML = `<thead><tr><th>${t('acNick')}</th><th>${t('adJoined')}</th><th>${t('adSeen')}</th><th>${t('adGames')}</th><th>${t('adElo')}</th><th>${t('adCheck')}</th><th>${t('adStatus')}</th><th></th></tr></thead><tbody>`
       + (rows.length ? rows.map(u => `<tr>
           <td class="nick">${badge({ nick: u.nick, elo: eloOf(u, currentGame()), country: u.country, admin: u.id === user.uid })}</td><td>${fmtDate(u.createdAt)}</td><td>${fmtDate(u.lastSeen)}</td><td class="num">${u.games || 0}</td>
           <td class="num">${eloOf(u, 'chess')} / ${eloOf(u, 'checkers')}</td>
+          <td>${checkCell(u)}</td>
           <td>${u.banned ? `<span class="pill bad">${t('adBannedOne')}</span>` : `<span class="pill good">${t('adActiveOne')}</span>`}</td>
           <td>${u.id === user.uid ? `<span class="hint">${t('adYou')}</span>` : `<button class="b${u.banned ? '' : ' danger'}" data-ban="${u.id}" data-to="${!u.banned}">${u.banned ? t('adUnban') : t('adBan')}</button>`}</td>
-        </tr>`).join('') : `<tr><td colspan="7" class="hint">${t('adNone')}</td></tr>`) + '</tbody>';
+        </tr>`).join('') : `<tr><td colspan="8" class="hint">${t('adNone')}</td></tr>`) + '</tbody>';
   }
   async function setBan(id, to, btn) {
     btn.disabled = true;
     try {
       await db.collection('users').doc(id).update({ banned: to });
+      // A banned player leaves the leaderboard; after an unban the entry comes back on their next visit
+      if (to) db.collection('leaders').doc(id).delete().catch(() => {});
       const u = users.find(x => x.id === id); if (u) u.banned = to;
       drawUsers();
     } catch (e) { btn.disabled = false; btn.textContent = errText(e); }
@@ -827,6 +1024,8 @@ window.gambitAuth = (() => {
       if (u && !u.emailVerified) await refreshVerified();
       user = auth.currentUser || u;
       if (u) await loadProfile(u); else { profile = null; admin = false; }
+      histList = null;
+      if (u && profile) syncLeader();
       ready = true;
       renderAcct(); emit();
       while (readyWaiters.length) readyWaiters.shift()();
@@ -837,7 +1036,7 @@ window.gambitAuth = (() => {
       const a = b.dataset.a;
       if (a === 'login') openModal('login');
       else if (a === 'finish') openModal('nick');
-      else if (a === 'profile') openModal('profile');
+      else if (a === 'profile') { openModal('profile'); loadHistory(); }
       else if (a === 'verify') openVerify();
       else if (a === 'logout') { auth.signOut(); $('adminApp').hidden = true; window.gambitSetGame && window.gambitSetGame(); }
       else if (a === 'admin') openAdmin();
@@ -846,6 +1045,8 @@ window.gambitAuth = (() => {
       if (e.target === $('authModal')) { closeModal(); return; }
       const m = e.target.closest('[data-m]');
       if (m) { mode = m.dataset.m; msg = ''; drawModal(); return; }
+      const hr = e.target.closest('[data-h]');
+      if (hr && Array.isArray(histList)) { const h = histList[+hr.dataset.h]; closeModal(); if (h && window.gambitOpenRecord) window.gambitOpenRecord(h); return; }
       const b = e.target.closest('[data-a]'); if (!b) return;
       if (b.dataset.a === 'close') closeModal();
       else if (b.dataset.a === 'resend') {
@@ -863,7 +1064,10 @@ window.gambitAuth = (() => {
     $('adminRefresh').addEventListener('click', loadAdmin);
     $('adminSearch').addEventListener('input', e => { adminQuery = e.target.value.trim(); drawUsers(); });
     $('adminUsers').addEventListener('click', e => { const b = e.target.closest('[data-ban]'); if (b) setBan(b.dataset.ban, b.dataset.to === 'true', b); });
+    $('adminLive').addEventListener('click', e => { const b = e.target.closest('[data-watch]'); if (b) window.gambitNet.spectate(b.dataset.wg, b.dataset.watch); });
     document.addEventListener('gambit-game', renderAcct);
+    // "Last seen" on the leaderboard entry, for friends lists
+    setInterval(() => { if (document.visibilityState === 'visible') syncLeader(); }, 180000);
     // Returning to the tab after clicking the link: notice the confirmation without a reload
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && user && !user.emailVerified && await refreshVerified()) { renderAcct(); emit(); }
@@ -880,7 +1084,7 @@ window.gambitAuth = (() => {
     elo: game => eloOf(profile, game), country: () => (profile && profile.country) || '', isAdmin: () => admin,
     // Re-read the profile (the rating may have changed in another tab) before it goes into a game
     refresh: async () => { if (user) { await loadProfile(user); renderAcct(); } },
-    badge, rate,
+    badge, rate, record, recordAcc,
     // What a win, a draw and a loss would do to the rating right now
     preview: (game, oppElo, floor, boost) => (user && profile && !profile.banned
       ? { w: eloDelta(game, oppElo, 1, floor, boost), d: eloDelta(game, oppElo, 0.5, floor, boost), l: eloDelta(game, oppElo, 0, floor, boost) }
@@ -922,6 +1126,25 @@ window.gambitNet = (() => {
   function create(game, box, cb) {
     let state = 'idle', code = '', myColor = null, opp = null, err = '', copied = false, unsub = null, ref = null;
     let pushing = false, pushAgain = false, pushTries = 0, sending = false, watchTimer = null, matchedGame = false;
+    // Colours swap every round (rematch), so the host's colour of round 0 is kept and flipped as needed
+    let baseColor = null, amHostNow = false, players = null, spectating = false, invited = '';
+    let drawOffer = null, rematch = null, chat = [], chatSeen = 0, chatInit = false, lastSaid = 0;
+    // Clocks: ms left for each side as of `since` (local time), for the move count `lastLen`
+    let tc = null, clk = null, since = 0, lastLen = 0, lastRound = -1, clockTimer = null, flagSent = -1, overAt = 0;
+    const swap = c => (c === 'w' ? 'b' : 'w');
+    const curColor = () => (baseColor && cb.round() % 2 ? swap(baseColor) : baseColor);
+    const TCS = ['', '1+0', '3+0', '3+2', '5+0', '10+0'];
+    let tcPick = '';
+    try { tcPick = localStorage.getItem('gambit-tc') || ''; } catch (e) {}
+    if (!TCS.includes(tcPick)) tcPick = '';
+    const parseTc = v => { const m = /^(\d+)\+(\d+)$/.exec(v || ''); return m ? { base: +m[1] * 60000, inc: +m[2] * 1000 } : null; };
+    const tcName = v => { const [m, i] = v.split('+'); return +i ? `${m}+${i}` : t('tcMin', { m }); };
+    const newClock = () => (parseTc(tcPick) ? { w: parseTc(tcPick).base, b: parseTc(tcPick).base } : null);
+    function resetExtras() {
+      clearInterval(clockTimer); clockTimer = null;
+      tc = null; clk = null; lastLen = 0; lastRound = -1; flagSent = -1; overAt = 0;
+      baseColor = null; players = null; drawOffer = null; rematch = null; chat = []; chatSeen = 0; chatInit = false; invited = '';
+    }
     const roomKey = 'gambit-room-' + game;
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -949,14 +1172,31 @@ window.gambitNet = (() => {
         if (wasSending !== sending && state === 'connected') draw();
         const g = snap.data(), me = A.user() && A.user().uid;
         const amHost = g.host === me;
+        players = {
+          host: { nick: g.hostNick, elo: g.hostElo, country: g.hostCountry, admin: !!g.hostAdmin },
+          guest: g.guest ? { nick: g.guestNick, elo: g.guestElo, country: g.guestCountry, admin: !!g.guestAdmin } : null,
+          hostColor: g.hostColor
+        };
+        tc = parseTc(g.tc);
+        players.tc = g.tc || '';
+        if (spectating) {
+          if (!g.guest) return;
+          if (state !== 'watching') { setState('watching'); cb.start(null); }
+          cb.applyState({ round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null });
+          afterSnapshot(g);
+          return;
+        }
         if (!g.guest) { if (amHost && state !== 'waiting') setState('waiting'); return; }
-        myColor = amHost ? g.hostColor : g.hostColor === 'w' ? 'b' : 'w';
+        amHostNow = amHost;
+        baseColor = amHost ? g.hostColor : swap(g.hostColor);
+        myColor = curColor();
         opp = amHost
           ? { nick: g.guestNick, elo: g.guestElo, country: g.guestCountry, admin: !!g.guestAdmin }
           : { nick: g.hostNick, elo: g.hostElo, country: g.hostCountry, admin: !!g.hostAdmin };
-        if (state !== 'connected') { setState('connected'); cb.start(myColor); countGame(); }
+        if (state !== 'connected') { invited = ''; setState('connected'); cb.start(myColor); countGame(); }
         const server = { round: g.round || 0, moves: Array.isArray(g.moves) ? g.moves : [], resigned: g.resigned || null };
         cb.applyState(server);
+        afterSnapshot(g);
         // Self-healing: the server copy is behind ours (a write was lost), so send our game again
         if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache && !pushing) {
           const mine = cb.getState();
@@ -971,9 +1211,157 @@ window.gambitNet = (() => {
       });
     }
 
+    // Clocks, draw offers, the rematch and chat, after the moves are in
+    function afterSnapshot(g) {
+      drawOffer = g.drawOffer || null;
+      rematch = g.rematch || null;
+      syncClock(g);
+      syncChat(g.chat);
+      // The game ended off the board: an agreed draw or a fallen flag
+      if (g.end && g.end.round === cb.round() && !cb.over()) cb.external(g.end.key, g.end.loser || null);
+      // Both want a rematch: the host starts it
+      if (!spectating && amHostNow && rematch && rematch.round === cb.round() && rematch.w && rematch.b && cb.over()) cb.newRound();
+      draw();
+    }
+
+    // ---------- Clocks ----------
+    // Each side's clock runs from its second move on; the mover writes the time left with the move
+    function syncClock(g) {
+      if (!tc) { clk = null; return; }
+      const len = Array.isArray(g.moves) ? g.moves.length : 0, r = g.round || 0;
+      if (r !== lastRound || !clk) { lastRound = r; lastLen = 0; clk = { w: tc.base, b: tc.base }; since = Date.now(); flagSent = -1; overAt = 0; }
+      if (len !== lastLen) {
+        if (g.clk && typeof g.clk.w === 'number' && typeof g.clk.b === 'number') clk = { w: g.clk.w, b: g.clk.b };
+        lastLen = len; since = Date.now();
+      }
+      if (!clockTimer) clockTimer = setInterval(tickClock, 200);
+    }
+    function clockForPush(st) {
+      if (!tc) return {};
+      if (st.round !== lastRound || !clk) { lastRound = st.round; lastLen = 0; clk = { w: tc.base, b: tc.base }; since = Date.now(); flagSent = -1; overAt = 0; }
+      const len = st.moves.length, me = curColor();
+      if (len > lastLen) {
+        const mover = (len - 1) % 2 ? 'b' : 'w';
+        if (mover === me && len - 1 >= 2) clk[me] = Math.max(0, clk[me] - (Date.now() - since)) + tc.inc;
+        lastLen = len; since = Date.now();
+      }
+      return { clk: { w: Math.round(clk.w), b: Math.round(clk.b) } };
+    }
+    function clockState() {
+      if (!tc || !clk) return null;
+      const turn = lastLen % 2 ? 'b' : 'w', over = cb.over();
+      // Once the game is over the clocks stop where they were; a fallen flag shows zero
+      if (over && !overAt) overAt = Date.now();
+      if (!over) overAt = 0;
+      const ticking = lastLen >= 2 && (state === 'connected' || state === 'watching');
+      const now = over ? overAt : Date.now();
+      return { turn, running: ticking && !over, left: c => clk[c] - (ticking && c === turn ? now - since : 0) };
+    }
+    const fmtClock = ms => {
+      ms = Math.max(0, ms);
+      if (ms < 10000) return (Math.floor(ms / 100) / 10).toFixed(1);
+      const sec = Math.ceil(ms / 1000);
+      return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    };
+    function paintClocks(cs) {
+      for (const el of box.querySelectorAll('[data-clk]')) {
+        const c = el.dataset.clk, l = cs.left(c);
+        el.querySelector('b').textContent = fmtClock(l);
+        el.classList.toggle('run', cs.running && cs.turn === c);
+        el.classList.toggle('low', l < 20000);
+      }
+    }
+    function tickClock() {
+      if (!tc || !(state === 'connected' || state === 'watching')) { clearInterval(clockTimer); clockTimer = null; return; }
+      const cs = clockState();
+      if (!cs) return;
+      paintClocks(cs);
+      if (!cs.running || spectating || flagSent === cb.round()) return;
+      // Our own flag falls at zero; the opponent's gets two seconds of grace for network delay
+      const l = cs.left(cs.turn);
+      if ((cs.turn === curColor() && l <= 0) || (cs.turn !== curColor() && l <= -2000)) {
+        flagSent = cb.round();
+        ref.update({ end: { round: cb.round(), key: 'time', loser: cs.turn }, updatedAt: A.ts() }).catch(() => { flagSent = -1; });
+      }
+    }
+    function clocksHTML() {
+      const cs = clockState();
+      if (!cs) return '';
+      const hostNow = players && (cb.round() % 2 ? swap(players.hostColor) : players.hostColor);
+      const nickOfColor = c => (players ? (c === hostNow ? players.host : players.guest || {}).nick || '' : '');
+      const bottom = spectating ? 'w' : curColor(), top = swap(bottom);
+      const row = c => `<div class="clk" data-clk="${c}"><span>${t(c === 'w' ? 'colW' : 'colB')} · ${!spectating && c === bottom ? t('onYou') : esc(nickOfColor(c))}</span><b>${fmtClock(cs.left(c))}</b></div>`;
+      return `<div class="clocks">${row(top)}${row(bottom)}</div>`;
+    }
+
+    // ---------- Quick chat ----------
+    const nickOf = from => (players ? ((from === 'h' ? players.host : players.guest) || {}).nick || '?' : '?');
+    function syncChat(list) {
+      chat = Array.isArray(list) ? list : [];
+      if (!chatInit) { chatInit = true; chatSeen = chat.length; return; }
+      if (chat.length > chatSeen) {
+        const mine = spectating ? null : amHostNow ? 'h' : 'g';
+        for (const c of chat.slice(chatSeen).filter(x => x.from !== mine).slice(-2)) {
+          if (window.gambitFx) { window.gambitFx.sound('notify'); window.gambitFx.toast(`<div><b>${esc(nickOf(c.from))}:</b> ${esc(t('chatPhrases')[c.p] || '')}</div>`, 3500); }
+        }
+        chatSeen = chat.length;
+      }
+    }
+    function chatHTML(readonly) {
+      const P = t('chatPhrases'), mine = spectating ? null : amHostNow ? 'h' : 'g';
+      const lines = chat.slice(-4).map(c => `<div class="cm"><b>${esc(c.from === mine ? t('onYou') : nickOf(c.from))}:</b> ${esc(P[c.p] || '')}</div>`).join('');
+      return (lines ? `<div class="chat">${lines}</div>` : '')
+        + (readonly ? '' : `<div class="phrases">${P.map((x, i) => `<button class="b" data-act="say" data-p="${i}">${esc(x)}</button>`).join('')}</div>`);
+    }
+    function say(i) {
+      if (state !== 'connected' || Date.now() - lastSaid < 1500) return;
+      lastSaid = Date.now();
+      ref.update({ chat: window.firebase.firestore.FieldValue.arrayUnion({ from: amHostNow ? 'h' : 'g', p: i, at: Date.now() }) })
+        .catch(e => { err = A.errText(e); draw(); });
+    }
+
+    // ---------- Draw offer and rematch ----------
+    function offerDraw() {
+      ref.update({ drawOffer: { round: cb.round(), by: curColor() }, updatedAt: A.ts() }).catch(e => { err = A.errText(e); draw(); });
+    }
+    function answerDraw(yes) {
+      const upd = yes ? { end: { round: cb.round(), key: 'draw', loser: null }, drawOffer: null, updatedAt: A.ts() } : { drawOffer: null, updatedAt: A.ts() };
+      ref.update(upd).catch(e => { err = A.errText(e); draw(); });
+    }
+    async function askRematch() {
+      if (state !== 'connected' || !cb.over()) return;
+      const r = cb.round(), me = curColor(), target = ref;
+      try {
+        await A.db().runTransaction(async tx => {
+          const cur = (await tx.get(target)).data().rematch;
+          const next = cur && cur.round === r ? { ...cur, [me]: true } : { round: r, w: me === 'w', b: me === 'b' };
+          tx.update(target, { rematch: next, updatedAt: A.ts() });
+        });
+      } catch (e) { err = A.errText(e); draw(); }
+    }
+
+    // ---------- Friends and watching ----------
+    async function invite(fid, fnick) {
+      await host(cb.side());
+      if (!ref || !code || state === 'error' || state === 'idle') return;
+      invited = fnick; draw();
+      try {
+        await A.db().collection('invites').doc(A.user().uid + '_' + fid)
+          .set({ from: A.user().uid, fromNick: A.profile().nick, to: fid, game, code, at: A.ts() });
+      } catch (e) { invited = ''; err = A.errText(e); draw(); }
+    }
+    function spectate(c) {
+      leave();
+      code = c; spectating = true; err = '';
+      ref = A.db().collection('games').doc(code);
+      setState('connecting');
+      watch();
+    }
+
     async function host(side) {
       if (!A.canPlay()) { A.prompt(() => host(side)); return; }
       matchedGame = false;
+      resetExtras();
       setState('opening');
       await A.refresh();
       const db = A.db(), me = A.user().uid, nick = A.profile().nick;
@@ -984,7 +1372,7 @@ window.gambitNet = (() => {
           await ref.set({
             game, host: me, hostNick: nick, hostColor: side === 'b' ? 'b' : 'w', guest: null, guestNick: null,
             hostElo: A.elo(game), hostCountry: A.country(), hostAdmin: A.isAdmin(),
-            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts()
+            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts(), tc: tcPick || null, clk: newClock()
           });
           copied = false; remember(); watch();
           return;
@@ -999,6 +1387,7 @@ window.gambitNet = (() => {
       const c1 = clean(raw);
       if (!c1) return;
       if (!A.canPlay()) { A.prompt(() => join(c1)); return; }
+      resetExtras();
       code = c1; setState('connecting');
       await A.refresh();
       ref = A.db().collection('games').doc(code);
@@ -1035,7 +1424,7 @@ window.gambitNet = (() => {
       const db = A.db(), me = A.user().uid, qref = db.collection('queue').doc(me);
       try {
         await qref.delete().catch(() => {});
-        await qref.set({ game, elo: A.elo(game), nick: A.profile().nick, country: A.country(), admin: A.isAdmin(), createdAt: A.ts(), matched: null });
+        await qref.set({ game, elo: A.elo(game), nick: A.profile().nick, country: A.country(), admin: A.isAdmin(), createdAt: A.ts(), matched: null, tc: tcPick });
       } catch (e) { fail(A.errText(e)); return; }
       if (state !== 'searching') { qref.delete().catch(() => {}); return; }
       mm = { start: Date.now(), ticks: 0, scanning: false };
@@ -1060,7 +1449,7 @@ window.gambitNet = (() => {
         const snap = await db.collection('queue').where('game', '==', game).where('matched', '==', null).get();
         const waited = (now - mm.start) / 1000;
         const cands = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .filter(c => c.id !== me && me < c.id && c.createdAt && now - c.createdAt.toMillis() < STALE)
+          .filter(c => c.id !== me && me < c.id && c.createdAt && now - c.createdAt.toMillis() < STALE && (c.tc || '') === tcPick)
           .filter(c => Math.abs(c.elo - myElo) <= rangeFor(Math.max(waited, (now - c.createdAt.toMillis()) / 1000)))
           .sort((a, b) => Math.abs(a.elo - myElo) - Math.abs(b.elo - myElo));
         for (const c of cands) {
@@ -1084,7 +1473,7 @@ window.gambitNet = (() => {
           tx.set(gref, {
             game, host: me, hostNick: A.profile().nick, hostColor: side, guest: null, guestNick: null,
             hostElo: A.elo(game), hostCountry: A.country(), hostAdmin: A.isAdmin(),
-            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts()
+            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts(), tc: tcPick || null, clk: newClock()
           });
           tx.update(theirQ, { matched: newCode });
           tx.delete(myQ);
@@ -1093,6 +1482,7 @@ window.gambitNet = (() => {
         return false;
       }
       stopSearch(true); // our ticket went away in the transaction
+      resetExtras();
       code = newCode; ref = gref; copied = false; matchedGame = true;
       remember(); setState('waiting'); watch();
       // The other player closed the page before joining: go back to the queue
@@ -1102,7 +1492,7 @@ window.gambitNet = (() => {
       return true;
     }
 
-    function leave() { stopSearch(false); matchedGame = false; stop(); forget(); myColor = null; pushAgain = false; setState('idle'); }
+    function leave() { stopSearch(false); matchedGame = false; stop(); if (!spectating) forget(); spectating = false; resetExtras(); myColor = null; pushAgain = false; setState('idle'); }
 
     // Send the whole game; on a failure try again with a growing pause, and send the newest
     // state if more moves were made meanwhile
@@ -1112,7 +1502,8 @@ window.gambitNet = (() => {
       pushing = true;
       const target = ref;
       try {
-        await target.update({ ...cb.getState(), updatedAt: A.ts() });
+        const st = cb.getState();
+        await target.update({ ...st, ...clockForPush(st), updatedAt: A.ts() });
         pushTries = 0;
         if (err) { err = ''; draw(); }
       } catch (e) {
@@ -1137,7 +1528,9 @@ window.gambitNet = (() => {
         h = `<div class="muted">${t('onVerify')}</div><div class="row"><button class="b primary" data-act="verify">${t('vfBtn')}</button></div>`;
       } else if (state === 'idle' || state === 'error') {
         if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
-        h += `<div class="row"><button class="b primary" data-act="find">${t('onFind')}</button></div>
+        h += `<label class="field" for="${game}-tc">${t('tcLabel')}<select id="${game}-tc" data-tc>`
+          + TCS.map(v => `<option value="${v}"${v === tcPick ? ' selected' : ''}>${v ? tcName(v) : t('tcNone')}</option>`).join('') + `</select></label>
+          <div class="row"><button class="b primary" data-act="find">${t('onFind')}</button></div>
           <div class="muted">${t('onFindHint')}</div>
           <div class="row"><button class="b" data-act="host">${t('onCreate')}</button></div>` + joinForm;
       } else if (state === 'searching') {
@@ -1157,13 +1550,28 @@ window.gambitNet = (() => {
           <div class="link">${esc(link)}</div>
           <div class="row"><button class="b primary" data-act="copy" data-link="${esc(link)}">${copied ? t('onCopied') : t('onCopy')}</button>
           <button class="b" data-act="leave">${t('cancel')}</button></div>
-          <div class="muted">${t('onWaiting')}</div>`;
+          <div class="muted">${invited ? esc(t('invSent', { n: invited })) : t('onWaiting')}</div>`;
       } else if (state === 'connected') {
+        const r = cb.round(), me = curColor(), over = cb.over();
+        const theyOffer = drawOffer && drawOffer.round === r && drawOffer.by !== me && !over;
+        const iOffer = drawOffer && drawOffer.round === r && drawOffer.by === me && !over;
+        const rmMine = !!(rematch && rematch.round === r && rematch[me]), rmTheirs = !!(rematch && rematch.round === r && rematch[swap(me)]);
         h += `<div class="ok">${t('onVs')} ${opp ? A.badge(opp) : '?'}</div>
-          <div class="muted">${t('onConnected', { c: t(myColor === 'w' ? 'white' : 'black').toLowerCase() })}</div>
+          <div class="muted">${t('onConnected', { c: t(me === 'w' ? 'white' : 'black').toLowerCase() })}${tc && players && players.tc ? ' · ⏱ ' + tcName(players.tc) : ''}</div>
+          ${clocksHTML()}
+          ${theyOffer ? `<div class="offer">${t('drOffered')}<div class="row"><button class="b primary" data-act="drawYes">${t('drAccept')}</button><button class="b" data-act="drawNo">${t('drDecline')}</button></div></div>` : ''}
+          ${over && rmTheirs && !rmMine ? `<div class="offer">${t('rmOffered')}<div class="row"><button class="b primary" data-act="rematch">${t('rmAccept')}</button></div></div>` : ''}
           ${sending ? `<div class="muted">${t('onSending')}</div>` : ''}
           ${err ? `<div class="warn">${esc(err)}</div>` : ''}
-          <div class="row"><button class="b" data-act="leave">${t('onLeave')}</button></div>`;
+          <div class="row">${!over ? `<button class="b" data-act="draw"${iOffer ? ' disabled' : ''}>${t(iOffer ? 'drSent' : 'drOffer')}</button>` : ''}${over && !(rmTheirs && !rmMine) ? `<button class="b primary" data-act="rematch"${rmMine ? ' disabled' : ''}>${t(rmMine ? 'rmSent' : 'rmBtn')}</button>` : ''}<button class="b" data-act="leave">${t('onLeave')}</button></div>
+          ${chatHTML(false)}`;
+      } else if (state === 'watching') {
+        const hostNow = players && (cb.round() % 2 ? swap(players.hostColor) : players.hostColor);
+        const pw = players && (hostNow === 'w' ? players.host : players.guest), pb = players && (hostNow === 'w' ? players.guest : players.host);
+        h += `<div class="ok">${t('spWatching')}</div>
+          ${pw && pb ? `<div class="muted">${t('colW')}: ${A.badge(pw)}</div><div class="muted">${t('colB')}: ${A.badge(pb)}</div>` : ''}
+          ${clocksHTML()}${chatHTML(true)}
+          <div class="row"><button class="b" data-act="leave">${t('spStop')}</button></div>`;
       }
       box.innerHTML = h;
     }
@@ -1176,11 +1584,21 @@ window.gambitNet = (() => {
       else if (act === 'find') findMatch();
       else if (act === 'verify') A.promptVerify();
       else if (act === 'leave') leave();
+      else if (act === 'draw') offerDraw();
+      else if (act === 'drawYes') answerDraw(true);
+      else if (act === 'drawNo') answerDraw(false);
+      else if (act === 'rematch') { b.disabled = true; askRematch(); }
+      else if (act === 'say') say(+b.dataset.p);
       else if (act === 'login') A.prompt();
       else if (act === 'copy') {
         const done = () => { copied = true; draw(); };
         try { navigator.clipboard.writeText(b.dataset.link).then(done, () => {}); } catch (e2) {}
       }
+    });
+    box.addEventListener('change', e => {
+      if (!e.target.matches('[data-tc]')) return;
+      tcPick = TCS.includes(e.target.value) ? e.target.value : '';
+      try { localStorage.setItem('gambit-tc', tcPick); } catch (e2) {}
     });
     box.addEventListener('submit', e => {
       e.preventDefault();
@@ -1192,8 +1610,10 @@ window.gambitNet = (() => {
     draw();
 
     const session = {
-      join, leave, draw, push,
-      color: () => (state === 'connected' ? myColor : null),
+      join, leave, draw, push, invite, spectate,
+      color: () => (state === 'connected' ? curColor() : null),
+      opp: () => (opp ? { ...opp } : null),
+      spectating: () => state === 'watching',
       oppElo: () => (opp && typeof opp.elo === 'number' ? opp.elo : 1000),
       active: () => state === 'connected',
       waiting: () => state === 'waiting' || state === 'searching',
@@ -1220,7 +1640,290 @@ window.gambitNet = (() => {
     });
   }
 
-  return { available, create, autoJoin };
+  // From the friends list, an invitation or the admin panel: switch to that game and act there
+  function joinGame(game, code) { const h = hooks[game]; if (!h) return; h.session.leave(); h.enter(true); h.session.join(code); }
+  function invite(game, fid, fnick) { const h = hooks[game]; if (!h) return; h.session.leave(); h.enter(true); h.session.invite(fid, fnick); }
+  function spectate(game, code) { const h = hooks[game]; if (!h) return; h.enter(true); h.session.spectate(code); }
+
+  return { available, create, autoJoin, joinGame, invite, spectate };
+})();
+</script>
+
+<script>
+// ---------- Sounds, sliding pieces, toasts and confetti ----------
+window.gambitFx = (() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const reduced = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let soundOn = true;
+  try { soundOn = localStorage.getItem('gambit-sound') !== '0'; } catch (e) {}
+
+  // Sounds are synthesised, so the page needs no audio files
+  let ctx = null;
+  function audio() {
+    if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return ctx;
+  }
+  function tone(freq, dur, type, vol, delay = 0) {
+    const c = audio(); if (!c) return;
+    const t0 = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  // A wooden knock: a short burst of filtered noise
+  function knock(vol, dur, freq, delay = 0) {
+    const c = audio(); if (!c) return;
+    const n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.2; g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(c.destination);
+    src.start(c.currentTime + delay);
+  }
+  const SOUNDS = {
+    move: () => knock(0.9, 0.08, 1500),
+    capture: () => { knock(1, 0.1, 900); knock(0.6, 0.07, 2200, 0.04); },
+    check: () => { tone(880, 0.14, 'triangle', 0.12); tone(1175, 0.18, 'triangle', 0.1, 0.1); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, 'sine', 0.12, i * 0.11)),
+    lose: () => [392, 330, 262].forEach((f, i) => tone(f, 0.36, 'sine', 0.1, i * 0.14)),
+    end: () => [523, 659].forEach((f, i) => tone(f, 0.3, 'sine', 0.1, i * 0.12)),
+    notify: () => { tone(988, 0.12, 'sine', 0.1); tone(1319, 0.16, 'sine', 0.08, 0.09); },
+    wrong: () => tone(196, 0.22, 'square', 0.05)
+  };
+  function sound(name) { if (!soundOn || !SOUNDS[name]) return; try { SOUNDS[name](); } catch (e) {} }
+
+  // The moved piece glides from its old square to the new one
+  function slide(board, from, to) {
+    if (reduced() || from === to) return;
+    const a = board.querySelector(`[data-i="${from}"]`), b = board.querySelector(`[data-i="${to}"]`);
+    const pc = b && b.querySelector('svg');
+    if (!a || !pc || !pc.animate) return;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    b.style.overflow = 'visible'; b.style.zIndex = 4;
+    const an = pc.animate([{ transform: `translate(${ra.left - rb.left}px, ${ra.top - rb.top}px)` }, { transform: 'translate(0, 0)' }],
+      { duration: 170, easing: 'ease-out' });
+    const done = () => { b.style.overflow = ''; b.style.zIndex = ''; };
+    an.onfinish = done; an.oncancel = done;
+  }
+
+  function toast(html, ms = 5000) {
+    const el = document.createElement('div');
+    el.className = 'toast'; el.innerHTML = html;
+    $('toasts').appendChild(el);
+    const close = () => el.remove();
+    if (ms) setTimeout(close, ms);
+    return { el, close };
+  }
+
+  function confetti(big) {
+    if (reduced()) return;
+    const cv = document.createElement('canvas'), dpr = window.devicePixelRatio || 1;
+    cv.className = 'confetti';
+    document.body.appendChild(cv);
+    const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr, g = cv.getContext('2d');
+    const colors = ['#f0a742', '#1d9e98', '#d23d36', '#4f9a35', '#6a83a3', '#ff5ccf'];
+    const parts = Array.from({ length: big ? 220 : 120 }, () => ({
+      x: W / 2 + (Math.random() - 0.5) * W * 0.3, y: H * 0.7,
+      vx: (Math.random() - 0.5) * W * 0.02, vy: -(0.6 + Math.random()) * H * 0.028,
+      s: (5 + Math.random() * 6) * dpr, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3,
+      c: colors[Math.floor(Math.random() * colors.length)]
+    }));
+    const t0 = performance.now();
+    (function frame(now) {
+      const el = now - t0;
+      g.clearRect(0, 0, W, H);
+      for (const q of parts) {
+        q.vy += H * 0.0009; q.x += q.vx; q.y += q.vy; q.r += q.vr; q.vx *= 0.99;
+        g.save(); g.translate(q.x, q.y); g.rotate(q.r); g.globalAlpha = Math.max(0, 1 - el / 3000);
+        g.fillStyle = q.c; g.fillRect(-q.s / 2, -q.s / 4, q.s, q.s / 2); g.restore();
+      }
+      if (el < 3000) requestAnimationFrame(frame); else cv.remove();
+    })(t0);
+  }
+
+  // Header: the sound switch and the piece set
+  const sb = $('soundBtn');
+  const drawSound = () => { sb.textContent = soundOn ? '🔊' : '🔇'; sb.setAttribute('aria-pressed', String(soundOn)); };
+  sb.addEventListener('click', () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem('gambit-sound', soundOn ? '1' : '0'); } catch (e) {}
+    drawSound(); sound('move');
+  });
+  drawSound();
+  const ps = $('pieceSet');
+  try { const v = localStorage.getItem('gambit-pieces'); if (v && ps.querySelector(`[value="${v}"]`)) ps.value = v; } catch (e) {}
+  const applyPieces = () => { document.documentElement.dataset.pieces = ps.value; try { localStorage.setItem('gambit-pieces', ps.value); } catch (e) {} };
+  ps.addEventListener('change', applyPieces);
+  applyPieces();
+
+  return { sound, slide, toast, confetti };
+})();
+</script>
+
+<script>
+// ---------- Leaderboard, friends and invitations ----------
+window.gambitSocial = (() => {
+  'use strict';
+  const t = (k, v) => window.gambitI18n.t(k, v);
+  const $ = id => document.getElementById(id);
+  const A = window.gambitAuth, fx = window.gambitFx;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  if (!A || !A.available) return {};
+  let modal = null, lbGame = 'chess', lbRows = null, lbErr = '';
+  let friends = null, friendsUid = null, frMsg = '', frOk = false;
+  const signedIn = () => !!(A.user() && A.profile());
+
+  function open(m) { modal = m; frMsg = ''; $('xModal').hidden = false; draw(); if (m === 'leaders') loadLeaders(); else loadFriends(); }
+  function close() { $('xModal').hidden = true; modal = null; }
+  function draw() {
+    if (!modal) return;
+    const head = title => `<div class="modal-head"><h2 id="xTitle">${title}</h2><button class="b x" data-x="close" aria-label="${t('cancel')}">×</button></div>`;
+    $('xBox').innerHTML = modal === 'leaders' ? head(t('lbTitle')) + drawLeaders() : head(t('frTitle')) + drawFriends();
+  }
+
+  // ---------- Leaderboard ----------
+  async function loadLeaders() {
+    lbRows = null; lbErr = ''; draw();
+    const game = lbGame;
+    try {
+      const snap = await A.db().collection('leaders').orderBy('elo.' + game, 'desc').limit(100).get();
+      if (game !== lbGame) return;
+      lbRows = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.rated && r.rated[game] > 0).slice(0, 50);
+    } catch (e) { lbErr = A.errText(e); lbRows = []; }
+    if (modal === 'leaders') draw();
+  }
+  function drawLeaders() {
+    let h = `<div class="tabs" role="tablist">${['chess', 'checkers'].map(g => `<button class="b" role="tab" data-lb="${g}" aria-selected="${g === lbGame}">${t(g === 'chess' ? 'gChess' : 'gCheckers')}</button>`).join('')}</div>`;
+    if (!lbRows) return h + `<div class="hint">${t('adLoading')}</div>`;
+    if (lbErr) return h + `<div class="warn">${esc(lbErr)}</div>`;
+    if (!lbRows.length) return h + `<div class="hint">${t('lbEmpty')}</div>`;
+    const me = A.user() && A.user().uid, known = new Set((friends || []).map(f => f.id));
+    return h + '<div class="table-wrap"><table class="lb"><tbody>' + lbRows.map((r, i) => `<tr class="${r.id === me ? 'me' : ''}">
+        <td class="rk">${i + 1}</td>
+        <td>${A.badge({ nick: r.nick, elo: r.elo[lbGame], country: r.country, admin: r.admin })}</td>
+        <td class="r hint">${t('lbGames', { n: r.rated[lbGame] })}</td>
+        <td class="r">${signedIn() && r.id !== me && !known.has(r.id) ? `<button class="b" data-addf="${esc(r.id)}" data-nick="${esc(r.nick)}" title="${t('frAdd')}" aria-label="${t('frAdd')}">+</button>` : ''}</td></tr>`).join('')
+      + '</tbody></table></div>';
+  }
+
+  // ---------- Friends ----------
+  const fcol = () => A.db().collection('users').doc(A.user().uid).collection('friends');
+  async function loadFriends() {
+    if (!signedIn()) { friends = []; return; }
+    const uid = A.user().uid;
+    try {
+      const snap = await fcol().get();
+      const list = snap.docs.map(d => ({ id: d.id, nick: d.data().nick }));
+      // Rating, flag and "last seen" come from the friend's public leaderboard entry
+      await Promise.all(list.map(async f => {
+        try { const l = await A.db().collection('leaders').doc(f.id).get(); if (l.exists) f.info = l.data(); } catch (e) {}
+      }));
+      if (!A.user() || A.user().uid !== uid) return;
+      friends = list.sort((a, b) => a.nick.localeCompare(b.nick));
+    } catch (e) { friends = []; frMsg = A.errText(e); frOk = false; }
+    draw();
+  }
+  async function addFriend(nick, id) {
+    nick = String(nick || '').trim();
+    try {
+      if (!id) {
+        const lower = nick.toLowerCase();
+        if (!/^[a-z0-9_]{3,16}$/.test(lower)) { frMsg = t('frNotFound', { n: nick }); frOk = false; draw(); return; }
+        const n = await A.db().collection('nicks').doc(lower).get();
+        if (!n.exists) { frMsg = t('frNotFound', { n: nick }); frOk = false; draw(); return; }
+        id = n.data().uid;
+        try { const l = await A.db().collection('leaders').doc(id).get(); if (l.exists && l.data().nick) nick = l.data().nick; } catch (e) {}
+      }
+      if (id === A.user().uid) { frMsg = t('frSelf'); frOk = false; draw(); return; }
+      await fcol().doc(id).set({ nick });
+      frMsg = t('frAdded', { n: nick }); frOk = true;
+      await loadFriends();
+    } catch (e) { frMsg = A.errText(e); frOk = false; draw(); }
+  }
+  async function removeFriend(id) { try { await fcol().doc(id).delete(); } catch (e) {} await loadFriends(); }
+  function seenText(ts) {
+    if (!ts || !ts.toMillis) return '';
+    const min = Math.max(0, Math.floor((Date.now() - ts.toMillis()) / 60000));
+    if (min < 5) return `<span class="seen on">● ${t('frOnline')}</span>`;
+    const ago = min < 60 ? t('frMin', { n: min }) : min < 1440 ? t('frHour', { n: Math.floor(min / 60) }) : t('frDay', { n: Math.floor(min / 1440) });
+    return `<span class="seen">${t('frSeen', { a: ago })}</span>`;
+  }
+  function drawFriends() {
+    if (!signedIn()) return `<div class="hint">${t('onNeedLogin')}</div>`;
+    let h = `<form class="inline-form" data-x="add"><input id="frNick" maxlength="16" autocomplete="off" placeholder="${t('frNickPh')}" aria-label="${t('frNickPh')}"><button class="b primary">${t('frAdd')}</button></form>`;
+    if (frMsg) h += `<div class="${frOk ? 'okmsg' : 'warn'}" role="alert">${esc(frMsg)}</div>`;
+    if (!A.canPlay()) h += `<div class="hint">${t('frNeedVerify')}</div>`;
+    if (!friends) return h + `<div class="hint">${t('adLoading')}</div>`;
+    if (!friends.length) return h + `<div class="hint">${t('frNone')}</div>`;
+    const g = window.gambitCurrentGame ? window.gambitCurrentGame() : 'chess';
+    return h + '<div class="fl">' + friends.map(f => {
+      const i = f.info || {};
+      const inv = A.canPlay() ? `<button class="b" data-inv="chess" data-id="${esc(f.id)}" data-nick="${esc(i.nick || f.nick)}">${t('frInvChess')}</button>`
+        + `<button class="b" data-inv="checkers" data-id="${esc(f.id)}" data-nick="${esc(i.nick || f.nick)}">${t('frInvCk')}</button>` : '';
+      return `<div class="frow"><div>${A.badge({ nick: i.nick || f.nick, elo: i.elo ? i.elo[g] : 1000, country: i.country, admin: i.admin })}${seenText(i.seen)}</div>
+        <div class="btns">${inv}<button class="b danger" data-rmf="${esc(f.id)}" aria-label="${t('frRemove')}" title="${t('frRemove')}">×</button></div></div>`;
+    }).join('') + '</div>';
+  }
+
+  // ---------- Invitations to a game ----------
+  let invUnsub = null, invUid = null;
+  const shown = new Set();
+  function listenInvites() {
+    const uid = signedIn() ? A.user().uid : null;
+    if (uid === invUid) return;
+    if (invUnsub) invUnsub();
+    invUnsub = null; invUid = uid;
+    if (!uid) return;
+    invUnsub = A.db().collection('invites').where('to', '==', uid).onSnapshot(snap => {
+      for (const ch of snap.docChanges()) {
+        if (ch.type === 'removed') continue;
+        const d = ch.doc.data(), ref = ch.doc.ref;
+        const at = d.at && d.at.toMillis ? d.at.toMillis() : Date.now();
+        if (Date.now() - at > 180000) { ref.delete().catch(() => {}); continue; }
+        const key = ch.doc.id + ':' + d.code;
+        if (shown.has(key)) continue;
+        shown.add(key);
+        fx.sound('notify');
+        const tt = fx.toast(`<div>${t('invText', { n: esc(d.fromNick), g: t(d.game === 'checkers' ? 'invCk' : 'invChess') })}</div>
+          <div class="btns"><button class="b primary" data-y>${t('invAccept')}</button><button class="b" data-n>${t('invDecline')}</button></div>`, 90000);
+        tt.el.addEventListener('click', e => {
+          if (e.target.closest('[data-y]')) { tt.close(); ref.delete().catch(() => {}); window.gambitNet.joinGame(d.game === 'checkers' ? 'checkers' : 'chess', d.code); }
+          else if (e.target.closest('[data-n]')) { tt.close(); ref.delete().catch(() => {}); }
+        });
+      }
+    }, () => {});
+  }
+
+  function onAccount() {
+    $('lbBtn').hidden = false;
+    $('friendsBtn').hidden = !signedIn();
+    const uid = signedIn() ? A.user().uid : null;
+    if (uid !== friendsUid) { friendsUid = uid; friends = null; if (uid) loadFriends(); }
+    listenInvites();
+    if (modal) draw();
+  }
+  A.onChange(onAccount);
+  $('lbBtn').addEventListener('click', () => open('leaders'));
+  $('friendsBtn').addEventListener('click', () => open('friends'));
+  $('xModal').addEventListener('click', e => {
+    if (e.target === $('xModal')) { close(); return; }
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.x === 'close') close();
+    else if (b.dataset.lb) { lbGame = b.dataset.lb; loadLeaders(); }
+    else if (b.dataset.addf) { b.disabled = true; addFriend(b.dataset.nick, b.dataset.addf); }
+    else if (b.dataset.rmf) removeFriend(b.dataset.rmf);
+    else if (b.dataset.inv) { close(); window.gambitNet.invite(b.dataset.inv, b.dataset.id, b.dataset.nick); }
+  });
+  $('xModal').addEventListener('submit', e => { e.preventDefault(); const v = $('frNick') ? $('frNick').value : ''; if (v.trim()) addFriend(v); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('xModal').hidden) close(); });
+  document.addEventListener('gambit-lang', draw);
+  return { open };
 })();
 </script>
 
@@ -1248,6 +1951,28 @@ const I18N = {
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
     bdLabel: 'Доска', bdSteel: 'Сталь', bdWood: 'Дерево', bdGreen: 'Турнир', bdMarble: 'Мрамор', bdOcean: 'Океан', bdRose: 'Роза',
+    pzBtn: '🧩 Задача дня', pzTitle: 'Задача дня №{n}', pzTaskW: 'Ход белых. Найдите выигрывающий ход.', pzTaskB: 'Ход чёрных. Найдите выигрывающий ход.',
+    pzBrill: 'Здесь есть бриллиантовая жертва!', pzWrong: 'Не то. Попробуйте ещё раз.', pzRight: 'Верно! Продолжайте.',
+    pzSolved: 'Решено! Завтра будет новая задача.', pzShown: 'Это было решение. Завтра будет новая задача.', pzShow: 'Показать решение', pzExit: 'Выйти',
+    lbBtn: '🏆 Лидеры', lbTitle: 'Таблица лидеров', lbEmpty: 'Пока никто не сыграл рейтинговую партию.', lbGames: '{n} парт.',
+    frBtn: '👥 Друзья', frTitle: 'Друзья', frNickPh: 'Ник друга', frAdd: 'Добавить', frAdded: '{n} теперь в друзьях.', frNotFound: 'Игрока {n} нет.',
+    frSelf: 'Себя добавить нельзя.', frNone: 'Друзей пока нет. Добавьте по нику или кнопкой + в таблице лидеров.',
+    frNeedVerify: 'Чтобы звать друзей в игру, подтвердите почту.', frInvChess: 'В шахматы', frInvCk: 'В шашки', frRemove: 'Удалить из друзей',
+    frOnline: 'в сети', frSeen: 'был(а) в сети {a} назад', frMin: '{n} мин', frHour: '{n} ч', frDay: '{n} дн.',
+    invText: '<b>{n}</b> зовёт вас сыграть в {g}', invChess: 'шахматы', invCk: 'шашки', invAccept: 'Играть', invDecline: 'Нет',
+    invSent: 'Приглашение отправлено игроку {n}. Игра начнётся, когда друг примет его.',
+    tcLabel: 'Контроль времени', tcNone: 'Без часов', tcMin: '{m} мин', onYou: 'вы',
+    drOffer: 'Предложить ничью', drSent: 'Ничья предложена', drOffered: 'Соперник предлагает ничью', drAccept: 'Принять', drDecline: 'Отклонить',
+    rmBtn: 'Реванш', rmSent: 'Ждём соперника…', rmOffered: 'Соперник хочет реванш', rmAccept: 'Сыграть ещё',
+    chatPhrases: ['Привет!', 'Удачи!', 'Хороший ход!', 'Упс…', 'Спасибо!', 'Хорошая игра!', 'Думаю…', 'До встречи!'],
+    spWatching: 'Вы смотрите партию', spStop: 'Перестать смотреть', spShort: 'наблюдение',
+    drawAgreed: 'Ничья по соглашению', timeW: 'У белых кончилось время. Победа чёрных', timeB: 'У чёрных кончилось время. Победа белых',
+    hiTitle: 'Последние партии', hiNone: 'Здесь появятся ваши партии с ботом и онлайн.', hiBot: 'бот «{l}» ({e})',
+    hi_win: 'Победа', hi_loss: 'Поражение', hi_draw: 'Ничья', hiAi: 'с ботом', hiOnline: 'онлайн', hiOpen: 'открыть отчёт',
+    hiReview: 'Партия из истории: отчёт справа, ходы можно листать.',
+    adCheck: 'Проверка', chAcc: 'точность {n}%', chTop: 'лучших ходов {n}%', chWeek: '+{n} Эло за неделю', adSuspect: 'Подозрительных',
+    adLiveH: 'Идущие партии', adNoLive: 'Сейчас никто не играет онлайн.', adMoves: '{n} ход.', adWatch: 'Смотреть',
+    pcLabel: 'Фигуры', pcClassic: 'Классика', pcNeon: 'Неон', pcGold: 'Золото и серебро', pcFlat: 'Контраст', sndLbl: 'Звук',
     autoOn: 'Автоход: вкл', autoOff: 'Автоход: выкл', autoThinking: 'Автоход думает…', autoFast: '⚡ Быстро',
     fxBrill: 'Бриллиантовый ход!', hintBrill: 'Бриллиантовый ход: {m} !!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
@@ -1309,6 +2034,28 @@ const I18N = {
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
     bdLabel: 'Board', bdSteel: 'Steel', bdWood: 'Wood', bdGreen: 'Tournament', bdMarble: 'Marble', bdOcean: 'Ocean', bdRose: 'Rose',
+    pzBtn: '🧩 Daily puzzle', pzTitle: 'Daily puzzle #{n}', pzTaskW: 'White to move. Find the winning move.', pzTaskB: 'Black to move. Find the winning move.',
+    pzBrill: 'There is a brilliant sacrifice here!', pzWrong: 'Not that one. Try again.', pzRight: 'Correct! Keep going.',
+    pzSolved: 'Solved! A new puzzle comes tomorrow.', pzShown: 'That was the solution. A new puzzle comes tomorrow.', pzShow: 'Show solution', pzExit: 'Exit',
+    lbBtn: '🏆 Leaders', lbTitle: 'Leaderboard', lbEmpty: 'Nobody has played a rated game yet.', lbGames: '{n} games',
+    frBtn: '👥 Friends', frTitle: 'Friends', frNickPh: "Friend's nick", frAdd: 'Add', frAdded: '{n} is now your friend.', frNotFound: 'There is no player called {n}.',
+    frSelf: "You can't add yourself.", frNone: 'No friends yet. Add one by nick or with the + button on the leaderboard.',
+    frNeedVerify: 'Confirm your e-mail to invite friends to a game.', frInvChess: 'Chess', frInvCk: 'Checkers', frRemove: 'Remove friend',
+    frOnline: 'online', frSeen: 'seen {a} ago', frMin: '{n} min', frHour: '{n} h', frDay: '{n} d',
+    invText: '<b>{n}</b> invites you to play {g}', invChess: 'chess', invCk: 'checkers', invAccept: 'Play', invDecline: 'No',
+    invSent: 'Invitation sent to {n}. The game starts when they accept it.',
+    tcLabel: 'Time control', tcNone: 'No clock', tcMin: '{m} min', onYou: 'you',
+    drOffer: 'Offer a draw', drSent: 'Draw offered', drOffered: 'Your opponent offers a draw', drAccept: 'Accept', drDecline: 'Decline',
+    rmBtn: 'Rematch', rmSent: 'Waiting for your opponent…', rmOffered: 'Your opponent wants a rematch', rmAccept: 'Play again',
+    chatPhrases: ['Hi!', 'Good luck!', 'Nice move!', 'Oops…', 'Thanks!', 'Good game!', 'Thinking…', 'See you!'],
+    spWatching: 'You are watching this game', spStop: 'Stop watching', spShort: 'watching',
+    drawAgreed: 'Draw by agreement', timeW: 'White ran out of time. Black wins', timeB: 'Black ran out of time. White wins',
+    hiTitle: 'Recent games', hiNone: 'Your games against the bot and online will show up here.', hiBot: '{l} bot ({e})',
+    hi_win: 'Win', hi_loss: 'Loss', hi_draw: 'Draw', hiAi: 'vs bot', hiOnline: 'online', hiOpen: 'open the report',
+    hiReview: 'A game from your history: the report is on the right; step through the moves.',
+    adCheck: 'Check', chAcc: 'accuracy {n}%', chTop: 'top moves {n}%', chWeek: '+{n} Elo in a week', adSuspect: 'Suspicious',
+    adLiveH: 'Games in progress', adNoLive: 'Nobody is playing online right now.', adMoves: '{n} moves', adWatch: 'Watch',
+    pcLabel: 'Pieces', pcClassic: 'Classic', pcNeon: 'Neon', pcGold: 'Gold & silver', pcFlat: 'High contrast', sndLbl: 'Sound',
     autoOn: 'Auto-move: on', autoOff: 'Auto-move: off', autoThinking: 'Auto-move is thinking…', autoFast: '⚡ Fast',
     fxBrill: 'Brilliant move!', hintBrill: 'Brilliant move: {m} !!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
@@ -1815,12 +2562,12 @@ function classify(loss, sac, bestV) {
 
 let report = null, anToken = 0;
 function analyze() {
-  const token = ++anToken, list = history.map(h => h.m), s = newGame();
+  const token = ++anToken, list = history.map(h => h.m), s = initial();
   report = { plies: [], done: false };
   let i = 0;
   const step = () => {
     if (token !== anToken) return;
-    if (i >= list.length) { report.done = true; render(); return; }
+    if (i >= list.length) { report.done = true; saveAccuracy(); render(); return; }
     const col = s.turn, ms = legal(s);
     let best = ms[0], bestV = -Infinity, playedV = null, pm = ms[0];
     for (const m of ms) {
@@ -1878,6 +2625,11 @@ function renderReport() {
 
 // ---------- Game state ----------
 let G, history, keys, sel = null, targets = [], pendingPromo = null, flipped = false, thinking = false, dropSq = -1, resigned = null;
+let ext = null; // an ending off the board: 'drawAgreed', or 'timeW' / 'timeB' for the side whose time ran out
+let slideMv = null; // the move to animate on the next render
+const fx = window.gambitFx;
+// Who won, by result
+const WINNER = { mateW: 'w', resB: 'w', timeB: 'w', mateB: 'b', resW: 'b', timeW: 'b' };
 let view = null; // index of the move shown on the board while reviewing; null shows the live game
 const posKey = s => s.b.map(p => p || '.').join('') + s.turn + (s.cr.wK ? 1 : 0) + (s.cr.wQ ? 1 : 0) + (s.cr.bK ? 1 : 0) + (s.cr.bQ ? 1 : 0) + s.ep;
 const repeatCount = k => keys.filter(x => x === k).length;
@@ -1892,6 +2644,7 @@ function insufficient(b) {
 
 function gameResult() {
   if (resigned) return { key: resigned === 'w' ? 'resW' : 'resB', over: true };
+  if (ext) return { key: ext, over: true };
   const ms = legal(G);
   if (!ms.length) {
     if (inCheck(G, G.turn)) return { key: G.turn === 'w' ? 'mateB' : 'mateW', over: true };
@@ -1943,10 +2696,39 @@ function finishRated() {
   if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t(A().user() && !A().verified() ? 'rtVerify' : 'rtGuest')); return; }
   if (rs.unrated) { setNote(t(rs.unrated)); return; }
   const key = gameResult().key;
-  const winner = { mateW: 'w', resB: 'w', mateB: 'b', resW: 'b' }[key];
+  const winner = WINNER[key];
   const score = winner ? (winner === me ? 1 : 0) : 0.5;
   setNote(t('rtSaving'));
-  A().rate('chess', ratedOppElo(), score, ratedFloor(), ratedBoost()).then(r => setNote(noteFor(r, 'rtResult')));
+  rs.ratePromise = A().rate('chess', ratedOppElo(), score, ratedFloor(), ratedBoost());
+  rs.ratePromise.then(r => setNote(noteFor(r, 'rtResult')));
+}
+// The game goes into the player's history, with the rating change and, later, the report's accuracy
+function recordGame() {
+  const me = myRatedColor();
+  if (rs.recorded || !me || puzzle || !A() || !A().record) return;
+  rs.recorded = true; rs.recColor = me;
+  const key = gameResult().key, w = WINNER[key];
+  const oppInfo = rs.mode === 'online' ? net.opp() : { bot: rs.level, elo: BOT_ELO[rs.level] || 1000 };
+  rs.historyRef = A().record({ game: 'chess', mode: rs.mode, opp: oppInfo, color: me, result: w ? (w === me ? 'win' : 'loss') : 'draw', key, moves: history.map(h => encMove(h.m)) }, rs.ratePromise);
+}
+function saveAccuracy() {
+  if (!rs.historyRef || !report) return;
+  const mine = report.plies.filter(p => p.col === rs.recColor);
+  if (!mine.length) return;
+  const acc = Math.round(100 * Math.exp(-mine.reduce((a, p) => a + Math.min(p.loss, 1000), 0) / mine.length / 200));
+  const top = Math.round(100 * mine.filter(p => p.cls === 'best' || p.cls === 'brill').length / mine.length);
+  A().recordAcc(rs.historyRef, acc, top);
+}
+// A win gets fanfare and confetti, a loss a sadder tune
+function celebrate() {
+  const me = myRatedColor(), w = WINNER[gameResult().key];
+  if (!me || !w) { fx.sound('end'); return; }
+  if (w === me) { fx.sound('win'); fx.confetti(rs.mode === 'online' || rs.level === 'impossible' || rs.level === 'hard'); }
+  else fx.sound('lose');
+}
+function gameOver() {
+  if (puzzle) { render(); return; }
+  finishRated(); recordGame(); celebrate(); analyze();
 }
 // ---------- Best-move hint (admin only) ----------
 // Full engine strength without the bot's randomness
@@ -2060,6 +2842,121 @@ function maybeAuto() {
   }, isAutoFast() ? 20 : 250);
 }
 
+// ---------- Daily puzzle ----------
+// Positions from bot games where one move wins; each line was checked by the engine
+const PUZZLES = [{"p":"r...kb...b..qp.r....pp.p...P.......N.Q...P.R...P..P..PP..K...B.R b - -1 0","s":["12-40","37-1","0-1"],"b":0,"c":"b"},{"p":".....b.rp.prkppp....................PB....q.....P.P..P.PR.R..Q.K b - -1 5","s":["42-45","61-54","45-37"],"b":0,"c":"b"},{"p":"r..q...rppk.p.b...np.....Q....BpP..............P.PP.KPP..R...BR. b - -1 1","s":["18-35","52-59","35-25"],"b":0,"c":"b"},{"p":"r.bqkbnrpppn..pp...p.....B.........Np.....N.....PPP..PPPR.BQK..R w KQkq -1 0","s":["35-20"],"b":0,"c":"w"},{"p":"........ppB....k...p...p..bP..........PPPb.......P..r..R..R....K b - 46 0","s":["41-27"],"b":0,"c":"b"},{"p":"....kbnrrppq.ppp...p.....B..........P.....N....PPPPP.PP.R.BK..R. b k -1 1","s":["10-18"],"b":0,"c":"b"},{"p":"Nnbk...r.p.p.ppp........p..n.....b.Nq.......B...PPPQ.PPPR...KB.R w KQ -1 4","s":["50-42"],"b":0,"c":"w"},{"p":"..k....r.q..bpp.p.p.b.....p...np...P....Q.......PPP.B.PPR....RK. w - -1 2","s":["52-16"],"b":0,"c":"w"},{"p":"r.......pppk...B......N...bP........q.b.........PPPK.PPPR.B....R w - -1 0","s":["22-5","0-5","15-36"],"b":1,"c":"w"},{"p":"r.b.kb.r.pq.ppppp..........pP..Q.P.N...PP...P.....P..PP.R...KB.R b KQkq -1 0","s":["10-42"],"b":0,"c":"b"},{"p":"r..q.bnr..pp.k.pb.p..pp.p...p.......P.....QB....PPPP.PPPRNB.K..R w KQ -1 0","s":["43-16"],"b":0,"c":"w"},{"p":"r.bq.kr.pppp.pp...nb.n.p....p.N...B.P.....N.....PPPP.PPPR.BQR.K. w - -1 0","s":["30-13"],"b":0,"c":"w"},{"p":"................p.....k..........................P....r.R.K..... b - -1 3","s":["54-62","58-51","62-56"],"b":0,"c":"b"},{"p":"r..qkb.r.p...pppp.p..p..P..nN...Q..P.B.....B.....P...PPPR..K...R w kq -1 0","s":["28-18","3-11","63-60","5-12","18-12"],"b":0,"c":"w"},{"p":"r.b.kb.rppp..ppp....p....B.........Q..P......q..PPP..P.PR.B.K..R b KQkq -1 1","s":["10-18","60-62","18-25"],"b":0,"c":"b"},{"p":"r.b....r......k.p.pPp...P...p.P....BP.................PP.....K.R w - -1 0","s":["35-28"],"b":0,"c":"w"},{"p":"......r......pp.Rr.b.....pkP..........p........PPP...PP......KR. w - -1 1","s":["49-33","26-27","16-17"],"b":0,"c":"w"},{"p":"....................pR..b..kP...P..P..p...p...P......K.......... b - -1 0","s":["42-50"],"b":0,"c":"b"},{"p":"....kb.r.ppbq.p..rp.pp..p...N..p...PP...P.N.P....PP....PR.Q..RK. w k -1 0","s":["28-22"],"b":0,"c":"w"},{"p":".r.r...k..P.....pp..bN.p................P....p.PKP...PP.R.R..... w - -1 3","s":["48-57"],"b":0,"c":"w"},{"p":".........................pK......P..pk...P.............P........ b - -1 2","s":["36-44"],"b":0,"c":"b"},{"p":"....kb.r....pppp.p........ppN...r.....B.....P...p.P..P.PR...K..R w KQk -1 0","s":["38-11","4-3","11-32"],"b":0,"c":"w"},{"p":".....b.r.b...k.pr...pnp......p...........P.q.N..PP.P.PPPR.BQ.RK. w - -1 1","s":["45-28","13-6","28-43"],"b":0,"c":"w"},{"p":".rb...Q.p...kr..qp.p.......Pp....P......P...B..P..P..P...K.R.... w - -1 1","s":["44-30","13-21","30-21","12-21","6-5"],"b":0,"c":"w"},{"p":"rq..k...p.p.b....p.p.p.....P...r.Q.........B....PPPP.PP.R.B..K.. w q -1 2","s":["43-22","4-5","22-31"],"b":0,"c":"w"},{"p":"............k....P...........p...P........r...P......P.P......K. w - -1 0","s":["17-9","42-58","62-54"],"b":0,"c":"w"},{"p":".B..k.nr.p.b..pp...p....q...pp............P.PN..P.P..PPPR...KB.R b KQk -1 2","s":["24-42","45-51","42-56"],"b":0,"c":"b"},{"p":"..kr.b.rp..qpppp...p.n.....Bn.Q...........N.P...PPPP.P.PR.B.K..R b KQ -1 4","s":["21-27"],"b":0,"c":"b"},{"p":"........r..........k........p..p..K.B..p..N.....P............... w - -1 0","s":["42-25"],"b":0,"c":"w"},{"p":"rnbq.b.rpp.k.ppp..p..........p............N..N..PPPPQPPPR.B.K..R w KQ -1 2","s":["45-28","11-10","28-13"],"b":0,"c":"w"},{"p":"r.bqkb.r.p.pnpp.p.p.p...Q......p....P.....N..N..PPnP.PPPR.BK.B.R w kq -1 0","s":["24-3"],"b":0,"c":"w"},{"p":"r..k.b.rppp..ppp..n.......nNp.........b.....B...PPP.NPPP..KR.B.R w - -1 3","s":["27-17"],"b":1,"c":"w"},{"p":"r..q...rpppkppbp..p...p.....Pb..........P.P..N.P.PPB.PP.R..QK..R w KQ -1 3","s":["51-23"],"b":1,"c":"w"},{"p":"rn.qkb.rp...pppp..p......N.p.b.....PnB.......N..PPP.PPPPR..QKB.R w KQkq -1 0","s":["25-10"],"b":0,"c":"w"},{"p":"r.b.k.nrpp...ppp...pp............nPPq...P....N...P..QPPPR.B.KB.R b KQkq -1 2","s":["33-50","60-59","36-52","61-52","50-56"],"b":0,"c":"b"},{"p":".....k.rp....ppp..........pR....Pr......b...P..P..P.KPP..R...... w - -1 1","s":["57-33","26-33","27-3","5-12","3-7"],"b":0,"c":"w"},{"p":"........p.p...b...p....p..Pk..p.......P...P.K..PPB.............. w - -1 2","s":["42-34","27-34","49-14"],"b":0,"c":"w"},{"p":"..r..b.rp..kp.p.p.p...........P.......qpP.NN.....PP..P.PR.B..K.R w - -1 4","s":["43-28","11-10","28-38"],"b":0,"c":"w"},{"p":"r.b.k.nr.p...pQpp...p......p.....n......q...BN..N.P.PPPPK..R.B.R w kq -1 5","s":["14-49","40-49","56-49"],"b":1,"c":"w"},{"p":"r.b..rk..ppn..p..q......p..RP.......B....Q......P.P..PPP....R.K. w - -1 6","s":["27-25"],"b":1,"c":"w"},{"p":"r.b.k..rppp..ppp...bp......q.....n.P.....Q......PPP.NPPPR.B.KB.R b KQkq -1 5","s":["27-41","50-41","33-50","60-59","50-56"],"b":0,"c":"b"},{"p":"r..r..k.p.p..pp...b........pp..Q...BP......B....P.P..PKP........ w - -1 0","s":["31-28"],"b":0,"c":"w"},{"p":"r.bqk..rppp..ppp....p............b.........QBN..PPP..PPP....RK.R w kq -1 2","s":["43-25","4-5","25-33"],"b":0,"c":"w"},{"p":"..........R...prk..b....p...p..p.......P..N......KP..PP......... w - -1 1","s":["10-18","16-9","18-19"],"b":0,"c":"w"},{"p":"r.br..k.pqp..ppp.........p..n...........B.PBN...P..Q.PPP.R...RK. w - -1 6","s":["43-15","6-15","51-3"],"b":1,"c":"w"},{"p":"r.b..k.rpppn..p....bqp.p.N..p.....P.P...P...QN...P...PPP.K.R.B.R w - -1 1","s":["59-19","10-19","25-10"],"b":0,"c":"w"},{"p":"..br..k..p.p.p.p....p.p.p.....q.P..Q.......N...P.PPnBPP...KR...R b - -1 8","s":["51-41","58-57","41-35"],"b":1,"c":"b"},{"p":"k.....r..p....ppp..PR.p.P.........P......n....PP.P...P........K. w - -1 1","s":["19-11","0-8","20-4","41-24","4-6"],"b":0,"c":"w"},{"p":"rq...b.rpppkpppp....b..............PN..........PnPPN.PP.R.BQ.RK. w - -1 0","s":["36-26","11-2","26-20"],"b":0,"c":"w"},{"p":"...rk..rppp..ppp....b...qn.......P..p....P..P..P.BQ..PP.R...KB.R b KQk -1 0","s":["24-33"],"b":0,"c":"b"},{"p":".rbqkb.rp.pppppp.p...n....nP.....PPQ....P.N..N......PPPPR.B.KB.R b KQk 41 0","s":["26-41"],"b":0,"c":"b"},{"p":"r..qkb.r.bpnpppp.p.p....p..........Pn.....NQ.N..PPP.BPPPR.B.K..R w KQkq -1 0","s":["42-36"],"b":0,"c":"w"},{"p":"............k.......P.......K...p.P...P........P.....n.......... b - -1 1","s":["32-40"],"b":0,"c":"b"},{"p":"rnbq...Qppppkr.p............Pp......n...........PPPN.PPPR.B.KB.R w KQ -1 5","s":["7-3"],"b":0,"c":"w"},{"p":"r..qkb.r.b...p............p..Qpp.p..p.........B.PPP..PPPR...K.NR w KQkq -1 0","s":["29-28","3-12","28-7"],"b":0,"c":"w"},{"p":".............k.p............R..NP......P.....PP...r..b.K........ b - -1 1","s":["53-35"],"b":0,"c":"b"},{"p":"r.b.kb.rppp..ppp..n....n...qp.......NB.....P.N..PPP..PPPR..QKB.R w KQkq 20 0","s":["37-23"],"b":0,"c":"w"},{"p":"...rkbr..ppq.pppn........B.p.p..p..P...PP.N.BP...PP..PP...KR..R. b - -1 1","s":["10-18"],"b":0,"c":"b"},{"p":"........p.pk.pp.....b......p...r...P.b.PP.N..N...rP..P.P...KR..R b - -1 0","s":["20-38"],"b":0,"c":"b"},{"p":"r.b.kb.rpppq.pp...np.n...B.p...p....P.....N..N..PPP..PPPR.BQ.K.R w kq -1 0","s":["36-27"],"b":0,"c":"w"},{"p":"r.b.kbn.pppqppp..........B.p...r...N......N.P...PPP..PPPR.B.K..R b KQq -1 2","s":["10-18"],"b":0,"c":"b"},{"p":"...k.b.q..p.p....p.........P.Q...P...P..P...P.........Pr...R..K. b - -1 0","s":["55-63","62-53","63-59"],"b":1,"c":"b"}];
+let puzzle = null, startPos = null; // startPos: where the game began, when not the usual start
+function loadPos(str) {
+  const [bd, turn, cr, ep, hm] = str.split(' ');
+  const b = bd.split('').map(ch => (ch === '.' ? null : (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase()));
+  return { b, turn, cr: { wK: cr.includes('K'), wQ: cr.includes('Q'), bK: cr.includes('k'), bQ: cr.includes('q') }, ep: +ep, hm: +hm, stack: [] };
+}
+const initial = () => (startPos ? loadPos(startPos) : newGame());
+const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
+function puzzleSolvedToday() { try { return localStorage.getItem('gambit-puzzle') === String(today()); } catch (e) { return false; } }
+function startPuzzle() {
+  if (!PUZZLES.length || thinking) return;
+  abandonRated();
+  if (online()) net.leave();
+  const prevMode = modeSel.value === 'online' ? 'ai' : modeSel.value;
+  modeSel.value = 'pvp';
+  const day = today(), p = PUZZLES[day % PUZZLES.length];
+  reset(false);
+  startPos = p.p; G = loadPos(p.p); keys = [posKey(G)];
+  puzzle = { p, k: 0, state: 'play', msg: '', day, prevMode };
+  flipped = G.turn === 'b';
+  render();
+}
+function exitPuzzle() {
+  if (!puzzle) return;
+  modeSel.value = puzzle.prevMode;
+  reset(false);
+}
+// The player's move: the planned one (or any mate) goes ahead, anything else is refused
+function puzzleTry(m) {
+  const pz = puzzle;
+  if (encMove(m) === pz.p.s[pz.k]) { pz.k++; pz.msg = ''; return true; }
+  make(G, m);
+  const mate = !legal(G).length && inCheck(G, G.turn);
+  unmake(G);
+  if (mate) { pz.k = pz.p.s.length; return true; }
+  pz.msg = 'bad'; fx.sound('wrong');
+  sel = null; targets = []; pendingPromo = null;
+  render();
+  return false;
+}
+// After a correct move: the solution is complete, or the opponent answers
+function puzzleAfter() {
+  const pz = puzzle;
+  if (!pz || pz.state !== 'play') return;
+  if (pz.k >= pz.p.s.length) { finishPuzzle(true); return; }
+  pz.msg = 'good'; render();
+  setTimeout(() => {
+    if (puzzle !== pz || pz.state !== 'play') return;
+    const r = legal(G).find(x => encMove(x) === pz.p.s[pz.k]);
+    if (!r) { finishPuzzle(true); return; }
+    pz.k++; play(r, true);
+  }, 500);
+}
+function finishPuzzle(solved) {
+  const pz = puzzle;
+  pz.state = solved ? 'solved' : 'shown';
+  if (solved) {
+    try { localStorage.setItem('gambit-puzzle', String(pz.day)); } catch (e) {}
+    fx.sound('win'); fx.confetti(false);
+  }
+  render();
+}
+function showSolution() {
+  const pz = puzzle;
+  if (!pz || pz.state !== 'play') return;
+  pz.state = 'showing'; pz.msg = '';
+  const step = () => {
+    if (puzzle !== pz) return;
+    const m = pz.k < pz.p.s.length && legal(G).find(x => encMove(x) === pz.p.s[pz.k]);
+    if (!m) { finishPuzzle(false); return; }
+    pz.k++; play(m, true);
+    setTimeout(step, 700);
+  };
+  step();
+}
+function renderPuzzle() {
+  const el = $('puzzleBar'), btn = $('puzzleBtn');
+  btn.hidden = !PUZZLES.length;
+  btn.textContent = t('pzBtn') + (puzzleSolvedToday() ? ' ✓' : '');
+  if (!puzzle) { el.hidden = true; return; }
+  el.hidden = false;
+  const pz = puzzle;
+  const msg = pz.state === 'solved' ? `<div class="pm good">${t('pzSolved')}</div>`
+    : pz.state === 'shown' ? `<div class="pm">${t('pzShown')}</div>`
+    : pz.msg === 'bad' ? `<div class="pm bad">${t('pzWrong')}</div>`
+    : pz.msg === 'good' ? `<div class="pm good">${t('pzRight')}</div>` : '';
+  el.innerHTML = `<div class="pt">${t('pzTitle', { n: pz.day % PUZZLES.length + 1 })}</div>
+    <div class="pm">${t(pz.p.c === 'w' ? 'pzTaskW' : 'pzTaskB')}${pz.p.b ? ' ' + t('pzBrill') : ''}</div>${msg}
+    <div class="btns">${pz.state === 'play' ? `<button class="b" data-pz="show">${t('pzShow')}</button>` : ''}<button class="b" data-pz="exit">${t('pzExit')}</button></div>`;
+}
+
+// A game from the history: replayed into two-player mode, so nothing is rated, and analysed
+function loadRecord(e) {
+  abandonRated();
+  net.leave();
+  modeSel.value = 'pvp';
+  reset(false);
+  for (const a of e.moves || []) {
+    const all = legal(G), m = all.find(x => encMove(x) === a);
+    if (!m) break;
+    const n = san(G, m, all); make(G, m); history.push({ m, san: n }); keys.push(posKey(G));
+  }
+  if (!gameResult().over) {
+    if (e.key === 'resW' || e.key === 'resB') resigned = e.key === 'resW' ? 'w' : 'b';
+    else if (['drawAgreed', 'timeW', 'timeB'].includes(e.key)) ext = e.key;
+  }
+  flipped = e.color === 'b';
+  setNote(t('hiReview'));
+  if (gameResult().over) analyze(); else render();
+}
+window.gambitChessLoad = loadRecord;
+
 // Leaving a rated game half-way counts as a loss, so nobody dodges a bad position
 function abandonRated() {
   const me = myRatedColor();
@@ -2074,7 +2971,7 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
   getState: () => ({ round, resigned, moves: history.map(h => encMove(h.m)) }),
   applyState: st => {
     if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
-    if (st.round > round) { round = st.round; reset(true); }
+    if (st.round > round) { round = st.round; reset(false); }
     // Our moves must be the start of theirs; then catch up on whatever is missing
     const same = (a, m) => a === encMove(m);
     if (st.moves.length < history.length || !history.every((h, i) => same(st.moves[i], h.m))) return;
@@ -2084,34 +2981,48 @@ const net = window.gambitNet.create('chess', $('onlineBox'), {
       if (!m) break;
       play(m, true);
     }
-    if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; finishRated(); analyze(); }
+    if ((st.resigned === 'w' || st.resigned === 'b') && !gameResult().over) { resigned = st.resigned; gameOver(); }
   },
   change: () => render(),
+  round: () => round,
+  over: () => gameResult().over,
+  external: (key, loser) => {
+    if (gameResult().over) return;
+    ext = key === 'draw' ? 'drawAgreed' : loser === 'w' ? 'timeW' : 'timeB';
+    sel = null; targets = []; pendingPromo = null;
+    gameOver();
+  },
+  newRound: () => { round++; reset(false); net.push(); },
   enter: show => { if (show && window.gambitSetGame) window.gambitSetGame('chess'); modeSel.value = 'online'; reset(false); }
 });
 
 function reset(keepFlip) {
   G = newGame(); history = []; keys = [posKey(G)]; sel = null; targets = []; pendingPromo = null; dropSq = -1;
-  resigned = null; report = null; anToken++; view = null;
+  resigned = null; ext = null; report = null; anToken++; view = null; puzzle = null; startPos = null; slideMv = null;
   newRating(); setNote(''); adminHint = null; brillMark = null;
   if (!keepFlip) flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
   render(); maybeAI(); maybeAuto();
 }
 
 function play(m, remote) {
+  const pzMove = !!(puzzle && puzzle.state === 'play' && !remote);
+  if (pzMove && !puzzleTry(m)) return;
   const all = legal(G);
   const notation = san(G, m, all);
   make(G, m);
   history.push({ m, san: notation });
   keys.push(posKey(G));
+  fx.sound(inCheck(G, G.turn) ? 'check' : m.cap ? 'capture' : 'move');
+  slideMv = { from: m.from, to: m.to };
   // A person's move (not the bot's) gets checked for brilliance in the background
   if (m.p[0] !== aiColor()) { const ply = history.length - 1; setTimeout(() => checkBrilliant(ply, m), 30); }
   if (online() && !remote) net.push();
   sel = null; targets = []; dropSq = m.to; view = null;
-  if (gameResult().over) { finishRated(); analyze(); return; }
+  if (gameResult().over) { gameOver(); if (pzMove) puzzleAfter(); return; }
   render();
   maybeAI();
   maybeAuto();
+  if (pzMove) puzzleAfter();
 }
 
 function maybeAI() {
@@ -2128,8 +3039,7 @@ function resign() {
   if (thinking || !history.length || gameResult().over || (online() && !net.active())) return;
   resigned = online() ? net.color() : aiColor() ? sideSel.value : G.turn;
   sel = null; targets = []; pendingPromo = null;
-  finishRated();
-  analyze();
+  gameOver();
   if (online()) net.push();
 }
 
@@ -2176,7 +3086,7 @@ function showPly(i) {
 
 // Position after move `ply`, replayed from the start
 function positionAt(ply) {
-  const s = newGame();
+  const s = initial();
   for (let i = 0; i <= ply; i++) make(s, history[i].m);
   return s;
 }
@@ -2234,13 +3144,15 @@ function render() {
   }
   boardEl.innerHTML = html;
   dropSq = -1;
+  if (slideMv && view === null) fx.slide(boardEl, slideMv.from, slideMv.to);
+  slideMv = null;
 
   const st = $('status');
   st.className = 'status' + (res.over ? ' over' : chk >= 0 ? ' chk' : '');
   if (res.over) st.innerHTML = t(res.key);
   else {
     let txt = thinking ? t('thinking') : autoBusy ? t('autoThinking') : (chk >= 0 ? t('check') : '') + t(G.turn === 'w' ? 'turnW' : 'turnB');
-    if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : txt + t(G.turn === net.color() ? 'onYour' : 'onTheirs');
+    if (online()) txt = net.spectating() ? txt + ' · ' + t('spShort') : !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : txt + t(G.turn === net.color() ? 'onYour' : 'onTheirs');
     st.innerHTML = `<span class="dot ${G.turn}"></span><span>${txt}</span>`;
   }
 
@@ -2266,16 +3178,24 @@ function render() {
       const p = report && report.plies[i], mk = p && CLS[p.cls].s ? `<span class="mk ${p.cls}">${CLS[p.cls].s}</span>` : '';
       return `<button class="mv${i === lastIdx ? ' cur' : ''}" data-ply="${i}">${fmt(history[i].san)}${mk}</button>`;
     };
+    // A puzzle can start with Black to move: the first row then has an empty White cell
+    const off = startPos && startPos.split(' ')[1] === 'b' ? 1 : 0;
     let s = '';
-    for (let i = 0; i < history.length; i += 2) {
-      s += `<span class="n">${i / 2 + 1}.</span>${cell(i)}${history[i + 1] ? cell(i + 1) : '<span></span>'}`;
+    for (let j = 0; j < history.length + off; j += 2) {
+      const i = j - off;
+      s += `<span class="n">${j / 2 + 1}.</span>${i >= 0 ? cell(i) : '<span>…</span>'}${history[i + 1] ? cell(i + 1) : '<span></span>'}`;
     }
     mv.innerHTML = s;
     if (view === null) mv.scrollTop = mv.scrollHeight;
   }
   renderReview();
-  $('undoBtn').disabled = thinking || !history.length || online();
-  $('resignBtn').disabled = thinking || !history.length || res.over || (online() && !net.active());
+  $('undoBtn').disabled = thinking || !history.length || online() || !!puzzle;
+  $('resignBtn').disabled = thinking || !history.length || res.over || (online() && !net.active()) || !!puzzle;
+  // Online, a new game is a rematch: both players must agree once the game is over
+  const inGame = online() && (net.active() || net.spectating());
+  $('newBtn').textContent = t(inGame ? 'rmBtn' : 'newg');
+  $('newBtn').disabled = inGame && (!res.over || net.spectating());
+  renderPuzzle();
   $('aiOpts').hidden = !(modeSel.value === 'ai' || online());
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
@@ -2312,10 +3232,15 @@ boardEl.addEventListener('click', e => {
 });
 $('newBtn').addEventListener('click', () => {
   if (thinking) return;
+  if (online() && (net.active() || net.spectating())) { $('onlineBox').querySelector('[data-act="rematch"]')?.click(); return; }
   abandonRated();
   reset(false);
-  if (online()) { round++; net.push(); }
 });
+$('puzzleBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-pz]');
+  if (b) (b.dataset.pz === 'show' ? showSolution : exitPuzzle)();
+});
+$('puzzleBtn').addEventListener('click', () => { if (window.gambitSetGame) window.gambitSetGame('chess'); startPuzzle(); });
 $('undoBtn').addEventListener('click', undo);
 $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
 $('resignBtn').addEventListener('click', resign);
@@ -2590,6 +3515,9 @@ function botMove(b, col, level) {
 // ---------- Game ----------
 const modeSel = $('ckMode'), sideSel = $('ckSide'), levelSel = $('ckLevel'), boardEl = $('ckBoard');
 let S, hist, sel = null, targets = [], flipped = false, thinking = false;
+let resigned = null, ext = null, slideMv = null; // ext: 'drawAgreed', 'timeW' or 'timeB', as in chess
+const fx = window.gambitFx;
+const WINNER = { ckWinW: 'w', resB: 'w', timeB: 'w', ckWinB: 'b', resW: 'b', timeW: 'b' };
 const aiColor = () => (modeSel.value === 'ai' ? opp(sideSel.value) : null);
 const online = () => modeSel.value === 'online';
 let round = 0; // bumped by "New game" so both players know to start over
@@ -2620,11 +3548,35 @@ function finishRated() {
   rs.done = true;
   if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t(A().user() && !A().verified() ? 'rtVerify' : 'rtGuest')); return; }
   if (rs.unrated) { setNote(t(rs.unrated)); return; }
-  const key = result().key;
-  const score = key === 'ckDraw' ? 0.5 : (key === 'ckWinW') === (me === 'w') ? 1 : 0;
+  const winner = WINNER[result().key];
+  const score = winner ? (winner === me ? 1 : 0) : 0.5;
   setNote(t('rtSaving'));
-  A().rate('checkers', ratedOppElo(), score, ratedFloor(), ratedBoost()).then(r => setNote(noteFor(r, 'rtResult')));
+  rs.ratePromise = A().rate('checkers', ratedOppElo(), score, ratedFloor(), ratedBoost());
+  rs.ratePromise.then(r => setNote(noteFor(r, 'rtResult')));
 }
+function recordGame() {
+  const me = myRatedColor();
+  if (rs.recorded || !me || !A() || !A().record) return;
+  rs.recorded = true; rs.recColor = me;
+  const key = result().key, w = WINNER[key];
+  const oppInfo = rs.mode === 'online' ? net.opp() : { bot: rs.level, elo: BOT_ELO[rs.level] || 1000 };
+  rs.historyRef = A().record({ game: 'checkers', mode: rs.mode, opp: oppInfo, color: me, result: w ? (w === me ? 'win' : 'loss') : 'draw', key, moves: hist.map(h => h.m.path.join('-')) }, rs.ratePromise);
+}
+function saveAccuracy() {
+  if (!rs.historyRef || !report) return;
+  const mine = report.plies.filter(q => q.col === rs.recColor);
+  if (!mine.length) return;
+  const acc = Math.round(100 * Math.exp(-mine.reduce((a, q) => a + Math.min(q.loss, 1000), 0) / mine.length / 200));
+  const top = Math.round(100 * mine.filter(q => q.cls === 'best' || q.cls === 'brill').length / mine.length);
+  A().recordAcc(rs.historyRef, acc, top);
+}
+function celebrate() {
+  const me = myRatedColor(), w = WINNER[result().key];
+  if (!me || !w) { fx.sound('end'); return; }
+  if (w === me) { fx.sound('win'); fx.confetti(rs.mode === 'online' || rs.level === 'impossible' || rs.level === 'hard'); }
+  else fx.sound('lose');
+}
+function gameOver() { finishRated(); recordGame(); celebrate(); analyze(); }
 // Best-move hint (admin only)
 // ---------- Brilliant move, live (same test as the report) ----------
 let brillMark = null; // { ply, m, sq }
@@ -2734,7 +3686,7 @@ function abandonRated() {
 const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
   side: () => sideSel.value,
   start: () => { round = 0; reset(); },
-  getState: () => ({ round, moves: hist.map(h => h.m.path.join('-')) }),
+  getState: () => ({ round, resigned, moves: hist.map(h => h.m.path.join('-')) }),
   applyState: st => {
     if (typeof st.round !== 'number' || !Array.isArray(st.moves) || st.round < round) return;
     if (st.round > round) { round = st.round; reset(); }
@@ -2745,12 +3697,24 @@ const net = window.gambitNet.create('checkers', $('ckOnlineBox'), {
       if (!m) break;
       play(m, true);
     }
+    if ((st.resigned === 'w' || st.resigned === 'b') && !result().over) { resigned = st.resigned; gameOver(); }
   },
   change: () => render(),
+  round: () => round,
+  over: () => result().over,
+  external: (key, loser) => {
+    if (result().over) return;
+    ext = key === 'draw' ? 'drawAgreed' : loser === 'w' ? 'timeW' : 'timeB';
+    sel = null; targets = [];
+    gameOver();
+  },
+  newRound: () => { round++; reset(); net.push(); },
   enter: show => { if (show) setGame('checkers'); modeSel.value = 'online'; reset(); }
 });
 
 function result() {
+  if (resigned) return { key: resigned === 'w' ? 'resW' : 'resB', over: true };
+  if (ext) return { key: ext, over: true };
   const ms = genMoves(S.b, S.turn);
   if (!ms.length) return { key: S.turn === 'w' ? 'ckWinB' : 'ckWinW', over: true };
   if (S.kc >= 30) return { key: 'ckDraw', over: true };
@@ -2777,7 +3741,7 @@ function analyze() {
   let i = 0;
   const step = () => {
     if (token !== anToken) return;
-    if (i >= hist.length) { report.done = true; render(); return; }
+    if (i >= hist.length) { report.done = true; saveAccuracy(); render(); return; }
     const h = hist[i], ms = genMoves(h.b, h.turn);
     let best = ms[0], bestV = -Infinity, playedV = null;
     for (const m of ms) {
@@ -2859,7 +3823,7 @@ function renderReview() {
 
 function reset() {
   S = { b: initBoard(), turn: 'w', kc: 0 };
-  report = null; anToken++; view = null;
+  report = null; anToken++; view = null; resigned = null; ext = null; slideMv = null;
   hist = []; sel = null; targets = []; thinking = false;
   newRating(); setNote(''); adminHint = null; brillMark = null;
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
@@ -2874,8 +3838,10 @@ function play(m, remote) {
   S.kc = m.caps.length || !kingMove ? 0 : S.kc + 1;
   S.turn = opp(S.turn);
   if (online() && !remote) net.push();
+  fx.sound(m.caps.length ? 'capture' : 'move');
+  slideMv = { from: m.from, to: m.to };
   sel = null; targets = []; view = null;
-  if (result().over) { finishRated(); analyze(); return; }
+  if (result().over) { gameOver(); return; }
   render(); maybeAI(); maybeAuto();
 }
 
@@ -2897,6 +3863,36 @@ function undo() {
   do { const h = hist.pop(); S.b = h.b; S.turn = h.turn; S.kc = h.kc; } while (hist.length && S.turn === aiColor());
   sel = null; targets = [];
   render(); maybeAI();
+}
+
+function resign() {
+  if (thinking || !hist.length || result().over || (online() && !net.active())) return;
+  resigned = online() ? net.color() : aiColor() ? sideSel.value : S.turn;
+  sel = null; targets = [];
+  gameOver();
+  if (online()) net.push();
+}
+
+// A game from the history, replayed into two-player mode and analysed
+function loadRecord(e) {
+  abandonRated();
+  net.leave();
+  modeSel.value = 'pvp';
+  reset();
+  for (const a of e.moves || []) {
+    const m = genMoves(S.b, S.turn).find(x => x.path.join('-') === a);
+    if (!m) break;
+    const kingMove = isKing(S.b[m.from]);
+    hist.push({ b: S.b, turn: S.turn, kc: S.kc, m, san: notation(m) });
+    S.b = apply(S.b, m); S.kc = m.caps.length || !kingMove ? 0 : S.kc + 1; S.turn = opp(S.turn);
+  }
+  if (!result().over) {
+    if (e.key === 'resW' || e.key === 'resB') resigned = e.key === 'resW' ? 'w' : 'b';
+    else if (['drawAgreed', 'timeW', 'timeB'].includes(e.key)) ext = e.key;
+  }
+  flipped = e.color === 'b';
+  setNote(t('hiReview'));
+  if (result().over) analyze(); else render();
 }
 
 function onSquare(i) {
@@ -2945,13 +3941,15 @@ function render() {
     html += `<button class="${cls.join(' ')}" data-i="${i}" aria-label="${sqName(i)}${p ? ' ' + p : ''}">${co}${p ? disc(p) : ''}${dot}</button>`;
   }
   boardEl.innerHTML = html;
+  if (slideMv && view === null) fx.slide(boardEl, slideMv.from, slideMv.to);
+  slideMv = null;
 
   const st = $('ckStatus');
   st.className = 'status' + (res.over ? ' over' : forced ? ' chk' : '');
   if (res.over) st.innerHTML = t(res.key);
   else {
     let txt = thinking ? t('thinking') : autoBusy ? t('autoThinking') : t(S.turn === 'w' ? 'turnW' : 'turnB') + (forced ? '. ' + t('ckMust') : '');
-    if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : t(S.turn === 'w' ? 'turnW' : 'turnB') + t(S.turn === net.color() ? 'onYour' : 'onTheirs') + (forced && S.turn === net.color() ? '. ' + t('ckMust') : '');
+    if (online()) txt = net.spectating() ? t(S.turn === 'w' ? 'turnW' : 'turnB') + ' · ' + t('spShort') : !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : t(S.turn === 'w' ? 'turnW' : 'turnB') + t(S.turn === net.color() ? 'onYour' : 'onTheirs') + (forced && S.turn === net.color() ? '. ' + t('ckMust') : '');
     st.innerHTML = `<span class="dot ${S.turn}"></span><span>${txt}</span>`;
   }
   const count = col => S.b.filter(p => colorOf(p) === col).length;
@@ -2974,6 +3972,10 @@ function render() {
   renderReview();
   renderReport();
   $('ckUndo').disabled = thinking || !hist.length || online();
+  $('ckResign').disabled = thinking || !hist.length || res.over || (online() && !net.active());
+  const inGame = online() && (net.active() || net.spectating());
+  $('ckNew').textContent = t(inGame ? 'rmBtn' : 'newg');
+  $('ckNew').disabled = inGame && (!res.over || net.spectating());
   $('ckAiOpts').hidden = !(modeSel.value === 'ai' || online());
   levelSel.closest('label').hidden = online();
   sideSel.disabled = online() && net.active();
@@ -3002,10 +4004,11 @@ boardEl.addEventListener('click', e => {
 });
 $('ckNew').addEventListener('click', () => {
   if (thinking) return;
+  if (online() && (net.active() || net.spectating())) { $('ckOnlineBox').querySelector('[data-act="rematch"]')?.click(); return; }
   abandonRated();
   reset();
-  if (online()) { round++; net.push(); }
 });
+$('ckResign').addEventListener('click', resign);
 $('ckUndo').addEventListener('click', undo);
 for (const id of ['ckMoves', 'ckRepBody']) {
   $(id).addEventListener('click', e => {
@@ -3069,6 +4072,13 @@ let saved = 'chess';
 try { if (localStorage.getItem('gambit-game') === 'checkers') saved = 'checkers'; } catch (e) {}
 setGame(saved);
 window.gambitSetGame = setGame;
+window.gambitCkLoad = loadRecord;
+// A game picked from the profile's history
+window.gambitOpenRecord = e => {
+  const g = e.game === 'checkers' ? 'checkers' : 'chess';
+  setGame(g);
+  (g === 'checkers' ? window.gambitCkLoad : window.gambitChessLoad)(e);
+};
 window.gambitCurrentGame = () => currentGame;
 window.gambitAuth.init();
 const q = new URLSearchParams(location.search);
