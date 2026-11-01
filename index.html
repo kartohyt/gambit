@@ -257,6 +257,8 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 .hint-btn { border-color: #3fae4a; color: #3fae4a; }
 .hint-note { font-size: .9rem; font-weight: 600; color: #3fae4a; }
 .hint-note:empty { display: none; }
+.auto-btn { border-color: #1d9e98; color: #1d9e98; }
+.auto-btn[aria-pressed="true"] { background: #1d9e98; color: #fff; }
 .hint-note.brill { color: #1d9e98; }
 .sq.hint.hint-brill::after { border-color: #1d9e98; }
 /* Brilliant move: a lasting !! on the square and a label that pops up and fades */
@@ -381,6 +383,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b" id="flipBtn" data-t="flip">Перевернуть</button>
           <button class="b" id="resignBtn" data-t="resign">Сдаться</button>
           <button class="b hint-btn" id="hintBtn" data-t="hintBtn" hidden>Лучший ход</button>
+          <button class="b auto-btn" id="autoBtn" aria-pressed="false" hidden>Автоход</button>
         </div>
       </div>
 
@@ -469,6 +472,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
           <button class="b" id="ckUndo" data-t="undo">Отменить ход</button>
           <button class="b" id="ckFlip" data-t="flip">Перевернуть</button>
           <button class="b hint-btn" id="ckHintBtn" data-t="hintBtn" hidden>Лучший ход</button>
+          <button class="b auto-btn" id="ckAutoBtn" aria-pressed="false" hidden>Автоход</button>
         </div>
       </div>
 
@@ -1238,6 +1242,7 @@ const I18N = {
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
     bdLabel: 'Доска', bdSteel: 'Сталь', bdWood: 'Дерево', bdGreen: 'Турнир', bdMarble: 'Мрамор', bdOcean: 'Океан', bdRose: 'Роза',
+    autoOn: 'Автоход: вкл', autoOff: 'Автоход: выкл', autoThinking: 'Автоход думает…',
     fxBrill: 'Бриллиантовый ход!', hintBrill: 'Бриллиантовый ход: {m} !!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
@@ -1298,6 +1303,7 @@ const I18N = {
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
     bdLabel: 'Board', bdSteel: 'Steel', bdWood: 'Wood', bdGreen: 'Tournament', bdMarble: 'Marble', bdOcean: 'Ocean', bdRose: 'Rose',
+    autoOn: 'Auto-move: on', autoOff: 'Auto-move: off', autoThinking: 'Auto-move is thinking…',
     fxBrill: 'Brilliant move!', hintBrill: 'Brilliant move: {m} !!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
@@ -2016,6 +2022,24 @@ function showHint() {
   }, 30);
 }
 
+// ---------- Auto-move (admin only) ----------
+// When on, the strong hint search plays the admin's side: their colour against the bot or online
+let autoOn = false, autoBusy = false;
+const autoColor = () => (modeSel.value === 'online' ? net.color() : modeSel.value === 'ai' ? sideSel.value : null);
+function maybeAuto() {
+  if (!autoOn || autoBusy || thinking || pendingPromo || view !== null || !A() || !A().isAdmin()) return;
+  if (gameResult().over || G.turn !== autoColor()) return;
+  autoBusy = true;
+  render();
+  const ply = history.length;
+  setTimeout(() => {
+    const r = autoOn && history.length === ply && !gameResult().over ? deepSearch(G, 1200) : null;
+    autoBusy = false;
+    const m = r && r.move && legal(G).find(x => sameMove(x, r.move));
+    if (m && history.length === ply && autoOn) play(m); else render();
+  }, 250);
+}
+
 // Leaving a rated game half-way counts as a loss, so nobody dodges a bad position
 function abandonRated() {
   const me = myRatedColor();
@@ -2051,7 +2075,7 @@ function reset(keepFlip) {
   resigned = null; report = null; anToken++; view = null;
   newRating(); setNote(''); adminHint = null; brillMark = null;
   if (!keepFlip) flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
-  render(); maybeAI();
+  render(); maybeAI(); maybeAuto();
 }
 
 function play(m, remote) {
@@ -2067,6 +2091,7 @@ function play(m, remote) {
   if (gameResult().over) { finishRated(); analyze(); return; }
   render();
   maybeAI();
+  maybeAuto();
 }
 
 function maybeAI() {
@@ -2100,7 +2125,7 @@ function undo() {
 }
 
 function onSquare(i) {
-  if (thinking || pendingPromo) return;
+  if (thinking || pendingPromo || autoBusy) return;
   if (view !== null) { showPly(null); return; }
   const res = gameResult();
   if (res.over || G.turn === aiColor() || (online() && G.turn !== net.color())) return;
@@ -2194,7 +2219,7 @@ function render() {
   st.className = 'status' + (res.over ? ' over' : chk >= 0 ? ' chk' : '');
   if (res.over) st.innerHTML = t(res.key);
   else {
-    let txt = thinking ? t('thinking') : (chk >= 0 ? t('check') : '') + t(G.turn === 'w' ? 'turnW' : 'turnB');
+    let txt = thinking ? t('thinking') : autoBusy ? t('autoThinking') : (chk >= 0 ? t('check') : '') + t(G.turn === 'w' ? 'turnW' : 'turnB');
     if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : txt + t(G.turn === net.color() ? 'onYour' : 'onTheirs');
     st.innerHTML = `<span class="dot ${G.turn}"></span><span>${txt}</span>`;
   }
@@ -2243,6 +2268,9 @@ function render() {
   $('ratingNote').innerHTML = ratingNote;
   $('hintBtn').hidden = !(A() && A().isAdmin());
   $('hintBtn').disabled = thinking || res.over || view !== null;
+  $('autoBtn').hidden = !(A() && A().isAdmin()) || modeSel.value === 'pvp';
+  $('autoBtn').textContent = t(autoOn ? 'autoOn' : 'autoOff');
+  $('autoBtn').setAttribute('aria-pressed', String(autoOn));
   $('hintNote').textContent = liveHint && !res.over ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
   $('hintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
   renderReport();
@@ -2269,6 +2297,7 @@ $('undoBtn').addEventListener('click', undo);
 $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
 $('resignBtn').addEventListener('click', resign);
 $('hintBtn').addEventListener('click', showHint);
+$('autoBtn').addEventListener('click', () => { autoOn = !autoOn; render(); maybeAuto(); });
 window.gambitAuth.onChange(() => render());
 function applyLang() {
   document.documentElement.lang = lang;
@@ -2641,6 +2670,21 @@ function showHint() {
     render();
   }, 30);
 }
+// Auto-move (admin only): the strong hint search plays the admin's side
+let autoOn = false, autoBusy = false;
+const autoColor = () => (modeSel.value === 'online' ? net.color() : modeSel.value === 'ai' ? sideSel.value : null);
+function maybeAuto() {
+  if (!autoOn || autoBusy || thinking || view !== null || !A() || !A().isAdmin()) return;
+  if (result().over || S.turn !== autoColor()) return;
+  autoBusy = true;
+  render();
+  const ply = hist.length;
+  setTimeout(() => {
+    const r = autoOn && hist.length === ply && !result().over ? deepSearchCk(S.b, S.turn, 1200) : null;
+    autoBusy = false;
+    if (r && r.move && hist.length === ply && autoOn) play(r.move); else render();
+  }, 250);
+}
 function abandonRated() {
   const me = myRatedColor();
   if (rs.done || rs.unrated || !me || !A() || !A().canPlay() || result().over) return;
@@ -2781,7 +2825,7 @@ function reset() {
   hist = []; sel = null; targets = []; thinking = false;
   newRating(); setNote(''); adminHint = null; brillMark = null;
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
-  render(); maybeAI();
+  render(); maybeAI(); maybeAuto();
 }
 
 function play(m, remote) {
@@ -2794,7 +2838,7 @@ function play(m, remote) {
   if (online() && !remote) net.push();
   sel = null; targets = []; view = null;
   if (result().over) { finishRated(); analyze(); return; }
-  render(); maybeAI();
+  render(); maybeAI(); maybeAuto();
 }
 
 function maybeAI() {
@@ -2818,7 +2862,7 @@ function undo() {
 }
 
 function onSquare(i) {
-  if (thinking) return;
+  if (thinking || autoBusy) return;
   if (view !== null) { showPly(null); return; }
   const res = result();
   if (res.over || S.turn === aiColor() || (online() && S.turn !== net.color())) return;
@@ -2868,7 +2912,7 @@ function render() {
   st.className = 'status' + (res.over ? ' over' : forced ? ' chk' : '');
   if (res.over) st.innerHTML = t(res.key);
   else {
-    let txt = thinking ? t('thinking') : t(S.turn === 'w' ? 'turnW' : 'turnB') + (forced ? '. ' + t('ckMust') : '');
+    let txt = thinking ? t('thinking') : autoBusy ? t('autoThinking') : t(S.turn === 'w' ? 'turnW' : 'turnB') + (forced ? '. ' + t('ckMust') : '');
     if (online()) txt = !net.active() ? t(net.waiting() ? 'onWait' : 'onIdle') : t(S.turn === 'w' ? 'turnW' : 'turnB') + t(S.turn === net.color() ? 'onYour' : 'onTheirs') + (forced && S.turn === net.color() ? '. ' + t('ckMust') : '');
     st.innerHTML = `<span class="dot ${S.turn}"></span><span>${txt}</span>`;
   }
@@ -2904,6 +2948,9 @@ function render() {
   $('ckRatingNote').innerHTML = ratingNote;
   $('ckHintBtn').hidden = !(A() && A().isAdmin());
   $('ckHintBtn').disabled = thinking || res.over || view !== null;
+  $('ckAutoBtn').hidden = !(A() && A().isAdmin()) || modeSel.value === 'pvp';
+  $('ckAutoBtn').textContent = t(autoOn ? 'autoOn' : 'autoOff');
+  $('ckAutoBtn').setAttribute('aria-pressed', String(autoOn));
   $('ckHintNote').textContent = liveHint ? t(liveHint.brill ? 'hintBrill' : 'hintIs', { m: liveHint.text }) : '';
   $('ckHintNote').classList.toggle('brill', !!(liveHint && liveHint.brill));
 }
@@ -2946,6 +2993,7 @@ levelSel.addEventListener('change', () => {
 });
 document.addEventListener('gambit-lang', render);
 $('ckHintBtn').addEventListener('click', showHint);
+$('ckAutoBtn').addEventListener('click', () => { autoOn = !autoOn; render(); maybeAuto(); });
 window.gambitAuth.onChange(() => render());
 
 // ---------- Game switch ----------
