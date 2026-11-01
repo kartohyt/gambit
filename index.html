@@ -626,6 +626,7 @@ window.gambitAuth = (() => {
       : esc(user.email);
     el.innerHTML = `<span class="who${profile && profile.banned ? ' banned' : ''}" title="${esc(user.email)}">${name}${profile && profile.banned ? ' · ' + t('acBanned') : ''}</span>`
       + (!profile ? `<button class="b primary" data-a="finish">${t('acFinish')}</button>` : `<button class="b" data-a="profile">${t('acProfile')}</button>`)
+      + (profile && !user.emailVerified ? `<button class="b danger" data-a="verify">${t('vfBtn')}</button>` : '')
       + (admin ? `<button class="b" data-a="admin">${t('acAdmin')}</button>` : '')
       + `<button class="b" data-a="logout">${t('acLogout')}</button>`;
   }
@@ -636,7 +637,7 @@ window.gambitAuth = (() => {
   function closeModal() { $('authModal').hidden = true; }
   function drawModal() {
     const box = $('authBox');
-    const tabs = mode === 'nick' || mode === 'profile' ? '' : `<div class="tabs" role="tablist">
+    const tabs = mode === 'nick' || mode === 'profile' || mode === 'verify' ? '' : `<div class="tabs" role="tablist">
         <button class="b" role="tab" data-m="login" aria-selected="${mode === 'login'}">${t('acLogin')}</button>
         <button class="b" role="tab" data-m="register" aria-selected="${mode === 'register'}">${t('acRegister')}</button></div>`;
     const f = (id, type, label, ac, extra = '') => `<label class="field" for="${id}">${label}<input id="${id}" type="${type}" autocomplete="${ac}" ${extra}></label>`;
@@ -645,17 +646,19 @@ window.gambitAuth = (() => {
     else if (mode === 'register') body = f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`
       + countrySelect('auCountry', guessCountry())
       + f('auEmail', 'email', t('acEmail'), 'email') + f('auPass', 'password', t('acPass'), 'new-password') + `<div class="hint">${t('acPassHint')}</div>`;
+    else if (mode === 'verify') body = `<p class="hint">${esc(t('vfText', { e: user ? user.email : '' }))}</p><p class="hint">${t('vfWhy')}</p>`;
     else if (mode === 'profile') body = `<div>${badge({ nick: profile.nick, elo: eloOf(profile, currentGame()), country: profile.country, admin })}</div>`
       + countrySelect('auCountry', profile.country || '');
     else body = `<p class="hint">${t('acNickStep')}</p>` + f('auNick', 'text', t('acNick'), 'username', 'maxlength="16"') + `<div class="hint">${t('acNickHint')}</div>`
       + countrySelect('auCountry', guessCountry());
-    const label = mode === 'login' ? t('acLogin') : mode === 'register' ? t('acCreate') : t('acSave');
-    box.innerHTML = `<div class="modal-head"><h2 id="authTitle">${mode === 'nick' ? t('acFinish') : mode === 'profile' ? t('acProfile') : t('acTitle')}</h2>
+    const label = mode === 'login' ? t('acLogin') : mode === 'register' ? t('acCreate') : mode === 'verify' ? t('vfDone') : t('acSave');
+    box.innerHTML = `<div class="modal-head"><h2 id="authTitle">${mode === 'nick' ? t('acFinish') : mode === 'profile' ? t('acProfile') : mode === 'verify' ? t('vfTitle') : t('acTitle')}</h2>
         <button class="b x" data-a="close" aria-label="${t('cancel')}">×</button></div>${tabs}
       <form id="authForm" class="auth-form">${body}
         ${msg ? `<div class="${msgOk ? 'okmsg' : 'warn'}" role="alert">${esc(msg)}</div>` : ''}
         <button class="b primary" ${busy ? 'disabled' : ''}>${busy ? '…' : label}</button>
         ${mode === 'login' ? `<button type="button" class="linkbtn" data-a="reset">${t('acForgot')}</button>` : ''}
+        ${mode === 'verify' ? `<button type="button" class="linkbtn" data-a="resend">${t('vfResend')}</button>` : ''}
       </form>`;
   }
   async function submit() {
@@ -679,6 +682,12 @@ window.gambitAuth = (() => {
         pendingNick = nick;
         await auth.createUserWithEmailAndPassword(email, pass);
         await createProfile(nick, country);
+        await sendVerification().catch(() => {});
+      } else if (mode === 'verify') {
+        busy = false;
+        if (await refreshVerified()) { msg = t('vfOk'); msgOk = true; closeModal(); renderAcct(); emit(); const next = afterLogin; afterLogin = null; if (next) next(); }
+        else { msg = t('vfNotYet'); msgOk = false; drawModal(); }
+        return;
       } else if (mode === 'profile') {
         await db.collection('users').doc(user.uid).update({ country });
         profile.country = country;
@@ -690,7 +699,14 @@ window.gambitAuth = (() => {
       }
       busy = false;
       if (!profile) { mode = 'nick'; drawModal(); return; }
-      closeModal(); renderAcct(); emit();
+      renderAcct(); emit();
+      // A fresh account (or one never confirmed) goes straight to the e-mail confirmation
+      if (!auth.currentUser.emailVerified) {
+        mode = 'verify'; msg = ''; drawModal();
+        if (!verifySent) sendVerification().catch(() => {});
+        return;
+      }
+      closeModal();
       const next = afterLogin; afterLogin = null;
       if (next && !profile.banned) next();
     } catch (e) {
@@ -703,6 +719,31 @@ window.gambitAuth = (() => {
     }
   }
   let pendingNick = '';
+
+  // ---------- E-mail confirmation ----------
+  let verifySent = false;
+  function sendVerification() {
+    auth.languageCode = document.documentElement.lang || 'ru'; // the e-mail comes in the site's language
+    verifySent = true;
+    return auth.currentUser.sendEmailVerification();
+  }
+  // Accounts made before confirmation existed have never had the e-mail: send it when the dialog first opens
+  function openVerify() {
+    openModal('verify');
+    if (!verifySent && auth.currentUser && !auth.currentUser.emailVerified) {
+      sendVerification().catch(e => { msg = errText(e); msgOk = false; drawModal(); });
+    }
+  }
+  // Re-read the account; once confirmed, refresh the sign-in token so the database rules see it too
+  async function refreshVerified() {
+    const u = auth.currentUser;
+    if (!u) return false;
+    try { await u.reload(); } catch (e) { return false; }
+    if (!auth.currentUser.emailVerified) return false;
+    await auth.currentUser.getIdToken(true).catch(() => {});
+    user = auth.currentUser;
+    return true;
+  }
 
   // ---------- Admin panel ----------
   let users = [], adminQuery = '';
@@ -772,7 +813,9 @@ window.gambitAuth = (() => {
       db.useEmulator('127.0.0.1', 8085);
     }
     auth.onAuthStateChanged(async u => {
-      user = u;
+      // Coming back from the link in the e-mail: pick up the new status
+      if (u && !u.emailVerified) await refreshVerified();
+      user = auth.currentUser || u;
       if (u) await loadProfile(u); else { profile = null; admin = false; }
       ready = true;
       renderAcct(); emit();
@@ -785,6 +828,7 @@ window.gambitAuth = (() => {
       if (a === 'login') openModal('login');
       else if (a === 'finish') openModal('nick');
       else if (a === 'profile') openModal('profile');
+      else if (a === 'verify') openVerify();
       else if (a === 'logout') { auth.signOut(); $('adminApp').hidden = true; window.gambitSetGame && window.gambitSetGame(); }
       else if (a === 'admin') openAdmin();
     });
@@ -794,6 +838,9 @@ window.gambitAuth = (() => {
       if (m) { mode = m.dataset.m; msg = ''; drawModal(); return; }
       const b = e.target.closest('[data-a]'); if (!b) return;
       if (b.dataset.a === 'close') closeModal();
+      else if (b.dataset.a === 'resend') {
+        sendVerification().then(() => { msg = t('vfSent'); msgOk = true; drawModal(); }, err => { msg = errText(err); msgOk = false; drawModal(); });
+      }
       else if (b.dataset.a === 'reset') {
         const email = $('auEmail').value.trim();
         if (!email) { msg = t('aeEmailBad'); msgOk = false; drawModal(); return; }
@@ -807,6 +854,10 @@ window.gambitAuth = (() => {
     $('adminSearch').addEventListener('input', e => { adminQuery = e.target.value.trim(); drawUsers(); });
     $('adminUsers').addEventListener('click', e => { const b = e.target.closest('[data-ban]'); if (b) setBan(b.dataset.ban, b.dataset.to === 'true', b); });
     document.addEventListener('gambit-game', renderAcct);
+    // Returning to the tab after clicking the link: notice the confirmation without a reload
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && user && !user.emailVerified && await refreshVerified()) { renderAcct(); emit(); }
+    });
     document.addEventListener('gambit-lang', () => { renderAcct(); if (!$('authModal').hidden) drawModal(); if (!$('adminApp').hidden) loadAdmin(); });
   }
 
@@ -824,10 +875,15 @@ window.gambitAuth = (() => {
     preview: (game, oppElo, floor) => (user && profile && !profile.banned
       ? { w: eloDelta(game, oppElo, 1, floor), d: eloDelta(game, oppElo, 0.5, floor), l: eloDelta(game, oppElo, 0, floor) }
       : null),
-    canPlay: () => !!(user && profile && !profile.banned),
+    canPlay: () => !!(user && profile && !profile.banned && user.emailVerified),
+    verified: () => !!(user && user.emailVerified),
     banned: () => !!(profile && profile.banned),
     // Ask the player to sign in, then carry on with what they were doing
-    prompt: next => { afterLogin = next || null; openModal(user ? 'nick' : 'login'); },
+    prompt: next => {
+      afterLogin = next || null;
+      if (user && profile && !user.emailVerified) openVerify(); else openModal(!user ? 'login' : !profile ? 'nick' : 'login');
+    },
+    promptVerify: () => openVerify(),
     ts
   };
 })();
@@ -1067,6 +1123,8 @@ window.gambitNet = (() => {
         h = `<div class="muted">${t('onNeedLogin')}</div><div class="row"><button class="b primary" data-act="login">${t('acLogin')}</button></div>`;
       } else if (A.banned()) {
         h = `<div class="warn">${t('onBanned')}</div>`;
+      } else if (!A.verified()) {
+        h = `<div class="muted">${t('onVerify')}</div><div class="row"><button class="b primary" data-act="verify">${t('vfBtn')}</button></div>`;
       } else if (state === 'idle' || state === 'error') {
         if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
         h += `<div class="row"><button class="b primary" data-act="find">${t('onFind')}</button></div>
@@ -1106,6 +1164,7 @@ window.gambitNet = (() => {
       const act = b.dataset.act;
       if (act === 'host') host(cb.side());
       else if (act === 'find') findMatch();
+      else if (act === 'verify') A.promptVerify();
       else if (act === 'leave') leave();
       else if (act === 'login') A.prompt();
       else if (act === 'copy') {
@@ -1184,6 +1243,11 @@ const I18N = {
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
     rtFast: 'Партия без рейтинга: прошло меньше 15 секунд после прошлой.', rtFail: 'Не удалось сохранить рейтинг.',
     rtSaving: 'Считаем рейтинг…', rtGuest: 'Войдите, чтобы партии шли в рейтинг.', rtBot: 'Рейтинг бота: {e}', rtOdds: 'победа {w} · ничья {d} · поражение {l}',
+    vfTitle: 'Подтверждение почты', vfBtn: 'Подтвердить почту', vfResend: 'Отправить письмо ещё раз', vfDone: 'Я подтвердил',
+    vfText: 'Мы отправили письмо на {e}. Откройте ссылку из письма (если его нет, проверьте папку «Спам»), затем нажмите «Я подтвердил».',
+    vfWhy: 'Без подтверждения можно играть с ботом и вдвоём, но онлайн, подбор соперника и рейтинг откроются только после него.',
+    vfSent: 'Письмо отправлено.', vfNotYet: 'Почта ещё не подтверждена. Откройте ссылку из письма и попробуйте снова.', vfOk: 'Почта подтверждена!',
+    onVerify: 'Чтобы играть онлайн, подтвердите почту.', rtVerify: 'Подтвердите почту, чтобы партии шли в рейтинг.',
     acProfile: 'Профиль', acCountry: 'Страна', acNoCountry: '— не указывать —', acSaved: 'Сохранено.', adElo: 'Эло (шахм. / шашки)',
     acLogin: 'Войти', acRegister: 'Регистрация', acTitle: 'Аккаунт', acCreate: 'Создать аккаунт', acSave: 'Сохранить',
     acLogout: 'Выйти', acAdmin: 'Админка', acFinish: 'Завершить регистрацию', acBanned: 'заблокирован',
@@ -1239,6 +1303,11 @@ const I18N = {
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
     rtFast: 'Unrated game: less than 15 seconds since the last one.', rtFail: 'Could not save the rating.',
     rtSaving: 'Updating the rating…', rtGuest: 'Sign in to have your games rated.', rtBot: 'Bot rating: {e}', rtOdds: 'win {w} · draw {d} · loss {l}',
+    vfTitle: 'Confirm your e-mail', vfBtn: 'Confirm e-mail', vfResend: 'Send the e-mail again', vfDone: 'I have confirmed',
+    vfText: 'We sent an e-mail to {e}. Open the link in it (check the spam folder if it is not there), then press “I have confirmed”.',
+    vfWhy: 'Without confirming you can play the bot and two-player games, but online play, matchmaking and ratings open only after it.',
+    vfSent: 'E-mail sent.', vfNotYet: 'The e-mail is not confirmed yet. Open the link in it and try again.', vfOk: 'E-mail confirmed!',
+    onVerify: 'Confirm your e-mail to play online.', rtVerify: 'Confirm your e-mail to have your games rated.',
     acProfile: 'Profile', acCountry: 'Country', acNoCountry: '— not shown —', acSaved: 'Saved.', adElo: 'Elo (chess / checkers)',
     acLogin: 'Sign in', acRegister: 'Sign up', acTitle: 'Account', acCreate: 'Create account', acSave: 'Save',
     acLogout: 'Sign out', acAdmin: 'Admin', acFinish: 'Finish sign-up', acBanned: 'banned',
@@ -1710,7 +1779,7 @@ function finishRated() {
   const me = myRatedColor();
   if (rs.done || !me || !A() || !A().available) return;
   rs.done = true;
-  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t('rtGuest')); return; }
+  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t(A().user() && !A().verified() ? 'rtVerify' : 'rtGuest')); return; }
   if (rs.unrated) { setNote(t(rs.unrated)); return; }
   const key = gameResult().key;
   const winner = { mateW: 'w', resB: 'w', mateB: 'b', resW: 'b' }[key];
@@ -2286,7 +2355,7 @@ function finishRated() {
   const me = myRatedColor();
   if (rs.done || !me || !A() || !A().available) return;
   rs.done = true;
-  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t('rtGuest')); return; }
+  if (!A().canPlay()) { if (rs.mode === 'ai') setNote(t(A().user() && !A().verified() ? 'rtVerify' : 'rtGuest')); return; }
   if (rs.unrated) { setNote(t(rs.unrated)); return; }
   const key = result().key;
   const score = key === 'ckDraw' ? 0.5 : (key === 'ckWinW') === (me === 'w') ? 1 : 0;
