@@ -1600,6 +1600,152 @@ function negamax(s, depth, alpha, beta, ply) {
   return alpha;
 }
 
+// ---------- Strong search for the admin's hint ----------
+// Iterative deepening under a time budget, with a transposition table, killer and history move
+// ordering, check extensions and a richer evaluation. The bots keep their own search, so their
+// ratings stay what they were.
+const MATE = 100000;
+// Pawn structure, the bishop pair and rooks on open files, from White's side
+function evalExtras(b) {
+  let sc = 0;
+  const pawns = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] }, bishops = { w: 0, b: 0 };
+  for (let i = 0; i < 64; i++) {
+    const p = b[i];
+    if (!p) continue;
+    if (p[1] === 'P') pawns[p[0]][i & 7]++;
+    else if (p[1] === 'B') bishops[p[0]]++;
+  }
+  if (bishops.w >= 2) sc += 30;
+  if (bishops.b >= 2) sc -= 30;
+  for (const c of ['w', 'b']) {
+    const sg = c === 'w' ? 1 : -1, pf = pawns[c];
+    for (let f = 0; f < 8; f++) {
+      if (pf[f] > 1) sc -= sg * 15 * (pf[f] - 1);                                 // doubled
+      if (pf[f] && !(f > 0 && pf[f - 1]) && !(f < 7 && pf[f + 1])) sc -= sg * 12 * pf[f]; // isolated
+    }
+  }
+  for (let i = 0; i < 64; i++) {
+    const p = b[i];
+    if (!p) continue;
+    const c = p[0], f = i & 7, sg = c === 'w' ? 1 : -1;
+    if (p[1] === 'P') {
+      const en = c === 'w' ? 'bP' : 'wP', dir = c === 'w' ? -1 : 1, r = i >> 3;
+      let passed = true;
+      for (let rr = r + dir; rr >= 0 && rr < 8 && passed; rr += dir) {
+        for (let ff = Math.max(0, f - 1); ff <= Math.min(7, f + 1); ff++) if (b[rr * 8 + ff] === en) { passed = false; break; }
+      }
+      if (passed) { const adv = c === 'w' ? 6 - r : r - 1; sc += sg * (10 + adv * adv * 6); }
+    } else if (p[1] === 'R') {
+      if (!pawns.w[f] && !pawns.b[f]) sc += sg * 20;
+      else if (!pawns[c][f]) sc += sg * 10;
+    }
+  }
+  return sc;
+}
+const evaluatePlus = s => evaluate(s) + (s.turn === 'w' ? 1 : -1) * evalExtras(s.b);
+
+const STOP = {};
+// Returns { move, score, depth }. `rootOnly` limits the root to these moves; `maxDepth` caps the depth.
+function deepSearch(s, budgetMs, rootOnly, maxDepth = 30) {
+  const deadline = Date.now() + budgetMs, base = s.stack.length;
+  const TT = new Map(), killers = [], hist = {};
+  let nodes = 0;
+  const key = () => s.b.join() + s.turn + s.ep + (s.cr.wK ? 1 : 0) + (s.cr.wQ ? 1 : 0) + (s.cr.bK ? 1 : 0) + (s.cr.bQ ? 1 : 0);
+  const mk = m => m.from * 64 + m.to;
+  const same = (a, b) => a && b && a.from === b.from && a.to === b.to && (a.promo || null) === (b.promo || null);
+  const tick = () => { if ((++nodes & 1023) === 0 && Date.now() > deadline) throw STOP; };
+  function orderMoves(ms, ply, ttMove) {
+    for (const m of ms) {
+      m.o = same(m, ttMove) ? 1e7
+        : m.cap ? 1e6 + 10 * VAL[m.cap[1]] - VAL[m.p[1]]
+        : m.promo ? 9e5
+        : killers[ply] && killers[ply].includes(mk(m)) ? 8e5
+        : hist[mk(m)] || 0;
+    }
+    ms.sort((a, b) => b.o - a.o);
+  }
+  function qs(alpha, beta, qd) {
+    tick();
+    const stand = evaluatePlus(s);
+    if (stand >= beta) return beta;
+    if (stand > alpha) alpha = stand;
+    if (qd > 8) return alpha;
+    const ms = pseudo(s, true);
+    order(ms);
+    const col = s.turn;
+    for (const m of ms) {
+      if (m.cap && !m.promo && stand + VAL[m.cap[1]] + 200 < alpha) continue; // even this capture cannot help
+      make(s, m);
+      if (inCheck(s, col)) { unmake(s); continue; }
+      const v = -qs(-beta, -alpha, qd + 1);
+      unmake(s);
+      if (v >= beta) return beta;
+      if (v > alpha) alpha = v;
+    }
+    return alpha;
+  }
+  function search(depth, alpha, beta, ply) {
+    tick();
+    if (s.hm >= 100) return 0;
+    const col = s.turn, check = inCheck(s, col);
+    if (check && ply < 12) depth++; // look further when in check
+    if (depth <= 0) return qs(alpha, beta, 0);
+    const k = key(), tt = TT.get(k);
+    if (tt && tt.depth >= depth) {
+      if (tt.flag === 0) return tt.v;
+      if (tt.flag === 1 && tt.v >= beta) return tt.v;
+      if (tt.flag === -1 && tt.v <= alpha) return tt.v;
+    }
+    const ms = pseudo(s);
+    orderMoves(ms, ply, tt && tt.move);
+    const a0 = alpha;
+    let best = -Infinity, bestMove = null, any = false;
+    for (const m of ms) {
+      make(s, m);
+      if (inCheck(s, col)) { unmake(s); continue; }
+      any = true;
+      const v = -search(depth - 1, -beta, -alpha, ply + 1);
+      unmake(s);
+      if (v > best) { best = v; bestMove = m; }
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) {
+        if (!m.cap) {
+          const kl = killers[ply] || (killers[ply] = []);
+          if (!kl.includes(mk(m))) { kl.unshift(mk(m)); kl.length = Math.min(kl.length, 2); }
+          hist[mk(m)] = (hist[mk(m)] || 0) + depth * depth;
+        }
+        break;
+      }
+    }
+    if (!any) return check ? -MATE + ply : 0;
+    TT.set(k, { depth, v: best, flag: best <= a0 ? -1 : best >= beta ? 1 : 0, move: bestMove });
+    return best;
+  }
+  const roots = rootOnly ? rootOnly.slice() : legal(s);
+  if (!roots.length) return null;
+  let result = null;
+  try {
+    for (let d = 1; d <= maxDepth; d++) {
+      if (result) roots.sort((a, b) => (same(b, result.move) ? 1 : 0) - (same(a, result.move) ? 1 : 0));
+      let alpha = -Infinity, bm = null, bs = -Infinity;
+      for (const m of roots) {
+        make(s, m);
+        const v = -search(d - 1, -Infinity, -alpha, 1);
+        unmake(s);
+        if (v > bs) { bs = v; bm = m; }
+        if (v > alpha) alpha = v;
+      }
+      result = { move: bm, score: bs, depth: d };
+      if (Math.abs(bs) > MATE - 200) break; // a forced mate was found
+    }
+  } catch (e) {
+    if (e !== STOP) throw e;
+  } finally {
+    while (s.stack.length > base) unmake(s); // a timeout can stop the search mid-line
+  }
+  return result || { move: roots[0], score: 0, depth: 0 };
+}
+
 // Easy: a random move, grabbing a piece about half the time
 function dumbMove(s) {
   const ms = legal(s), caps = ms.filter(m => m.cap);
@@ -1853,10 +1999,19 @@ function showHint() {
   setTimeout(() => {
     const ply = history.length;
     // A sacrifice the brilliance test accepts beats the plain best move
-    const brill = findBrilliant(G);
-    const m = brill || searchMove(G, G.b.filter(Boolean).length <= 10 ? 4 : 3, 0);
-    if (!m || history.length !== ply) return;
-    adminHint = { ply, from: m.from, to: m.to, text: fmt(san(G, m, legal(G))), brill: !!brill };
+    const deep = deepSearch(G, 1500);
+    if (!deep || history.length !== ply) return;
+    let m = deep.move, brill = false;
+    // A sacrifice the brilliance test accepts is offered only if the deep search agrees it is as good
+    const cand = findBrilliant(G);
+    if (cand) {
+      if (sameMove(cand, deep.move)) brill = true;
+      else {
+        const alt = deepSearch(G, 1200, [cand], deep.depth);
+        if (alt && alt.depth >= deep.depth && alt.score >= deep.score - 20) { m = cand; brill = true; }
+      }
+    }
+    adminHint = { ply, from: m.from, to: m.to, text: fmt(san(G, m, legal(G))), brill };
     render();
   }, 30);
 }
@@ -2318,6 +2473,58 @@ function searchMove(b, col, depth, noise) {
   return best;
 }
 
+// ---------- Strong search for the admin's hint ----------
+// Iterative deepening under a time budget with a transposition table; the bots keep their own search
+const CK_STOP = {};
+function deepSearchCk(b, col, budgetMs, rootOnly, maxDepth = 40) {
+  const deadline = Date.now() + budgetMs, TT = new Map();
+  let nodes = 0;
+  const pk = m => m.path.join('-');
+  function srch(bd, c, depth, alpha, beta, ply) {
+    if ((++nodes & 511) === 0 && Date.now() > deadline) throw CK_STOP;
+    const ms = genMoves(bd, c);
+    if (!ms.length) return -10000 + ply;
+    // Keep going through capture chains so a recapture is never missed
+    if (depth <= 0 && (!ms[0].caps.length || depth < -8)) return evaluate(bd, c);
+    const k = bd.map(x => x || '.').join('') + c, tt = TT.get(k);
+    if (tt && tt.depth >= depth) {
+      if (tt.flag === 0) return tt.v;
+      if (tt.flag === 1 && tt.v >= beta) return tt.v;
+      if (tt.flag === -1 && tt.v <= alpha) return tt.v;
+    }
+    ms.sort((x, y) => (tt && pk(y) === tt.move ? 1e4 : y.caps.length) - (tt && pk(x) === tt.move ? 1e4 : x.caps.length));
+    const a0 = alpha;
+    let best = -Infinity, bestKey = null;
+    for (const m of ms) {
+      const v = -srch(apply(bd, m), c === 'w' ? 'b' : 'w', depth - 1, -beta, -alpha, ply + 1);
+      if (v > best) { best = v; bestKey = pk(m); }
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) break;
+    }
+    TT.set(k, { depth, v: best, flag: best <= a0 ? -1 : best >= beta ? 1 : 0, move: bestKey });
+    return best;
+  }
+  const roots = rootOnly ? rootOnly.slice() : genMoves(b, col);
+  if (!roots.length) return null;
+  let result = null;
+  try {
+    for (let d = 1; d <= maxDepth; d++) {
+      if (result) roots.sort((x, y) => (pk(y) === pk(result.move) ? 1 : 0) - (pk(x) === pk(result.move) ? 1 : 0));
+      let alpha = -Infinity, bm = null, bs = -Infinity;
+      for (const m of roots) {
+        const v = -srch(apply(b, m), col === 'w' ? 'b' : 'w', d - 1, -Infinity, -alpha, 1);
+        if (v > bs) { bs = v; bm = m; }
+        if (v > alpha) alpha = v;
+      }
+      result = { move: bm, score: bs, depth: d };
+      if (Math.abs(bs) > 9000) break; // a forced win or loss was found
+    }
+  } catch (e) {
+    if (e !== CK_STOP) throw e;
+  }
+  return result || { move: roots[0], score: 0, depth: 0 };
+}
+
 function botMove(b, col, level) {
   const ms = genMoves(b, col);
   if (!ms.length) return null;
@@ -2419,10 +2626,18 @@ function showHint() {
   $('ckHintNote').textContent = t('hintThinking');
   setTimeout(() => {
     const ply = hist.length;
-    const brill = findBrilliant(S.b, S.turn);
-    const m = brill || searchMove(S.b, S.turn, 7, 0);
-    if (!m || hist.length !== ply) return;
-    adminHint = { ply, path: m.path, text: notation(m), brill: !!brill };
+    const deep = deepSearchCk(S.b, S.turn, 1500);
+    if (!deep || hist.length !== ply) return;
+    let m = deep.move, brill = false;
+    const cand = findBrilliant(S.b, S.turn);
+    if (cand) {
+      if (samePath(cand, deep.move)) brill = true;
+      else {
+        const alt = deepSearchCk(S.b, S.turn, 1200, [cand], deep.depth);
+        if (alt && alt.depth >= deep.depth && alt.score >= deep.score - 20) { m = cand; brill = true; }
+      }
+    }
+    adminHint = { ply, path: m.path, text: notation(m), brill };
     render();
   }, 30);
 }
