@@ -365,6 +365,14 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 :root[data-pieces="flat"] .pc.b, :root[data-pieces="flat"] .ck.b { fill: #000; stroke: #000; }
 :root[data-pieces="flat"] .pc.b .ln, :root[data-pieces="flat"] .ck.b .ln { stroke: #fff; }
 :root[data-pieces="flat"] .pc.b .eye { fill: #fff; }
+/* Training menu */
+.tr-sec { display: grid; gap: 8px; }
+.tr-sec h3 { margin: 4px 0 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.tr-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.tr-row .hint, .tr-card .hint { color: var(--muted); font-size: .78rem; }
+.tr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.tr-card { font: inherit; color: inherit; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; display: grid; gap: 2px; }
+.tr-card:hover, .tr-card:focus-visible { border-color: var(--accent); outline: none; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -382,7 +390,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
     <div class="tag" data-t="tag">Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки</div>
     <div class="acct" id="acct" hidden></div>
     <div class="tools">
-      <button class="b" id="puzzleBtn" hidden>🧩</button>
+      <button class="b" id="trainBtn" data-t="trBtn">🎯 Тренировки</button>
       <button class="b" id="lbBtn" data-t="lbBtn" hidden>🏆 Лидеры</button>
       <button class="b" id="friendsBtn" data-t="frBtn" hidden>👥 Друзья</button>
       <button class="b" id="soundBtn" data-ta="sndLbl" aria-label="Звук" aria-pressed="true">🔊</button>
@@ -523,6 +531,7 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
         <div class="status" id="ckStatus" aria-live="polite"></div>
         <div class="rating-note" id="ckRatingNote" aria-live="polite"></div>
         <div class="hint-note" id="ckHintNote" aria-live="polite"></div>
+        <div class="puzzle-bar" id="ckPuzzleBar" aria-live="polite" hidden></div>
         <div class="tag" id="ckLeft"></div>
       </div>
 
@@ -586,6 +595,9 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 </div>
 <div class="modal" id="xModal" hidden>
   <div class="modal-box wide" id="xBox" role="dialog" aria-modal="true" aria-labelledby="xTitle"></div>
+</div>
+<div class="modal" id="trModal" hidden>
+  <div class="modal-box wide" id="trBox" role="dialog" aria-modal="true" aria-labelledby="trTitle"></div>
 </div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
@@ -1761,6 +1773,42 @@ window.gambitFx = (() => {
   ps.addEventListener('change', applyPieces);
   applyPieces();
 
+  // ---------- Training progress, kept in this browser ----------
+  const TKEY = 'gambit-train';
+  const trLoad = () => { try { return JSON.parse(localStorage.getItem(TKEY)) || {}; } catch (e) { return {}; } };
+  const trSave = d => { try { localStorage.setItem(TKEY, JSON.stringify(d)); } catch (e) {} };
+  const train = {
+    stats(game) {
+      const x = trLoad()[game] || {};
+      return { r: x.r || 1000, n: x.n || 0, ok: x.ok || 0, streak: x.streak || 0, best: x.best || 0, seen: x.seen || [] };
+    },
+    // The next puzzle: one not seen lately, close to the player's puzzle rating
+    pick(pool, game) {
+      const st = train.stats(game), recent = new Set(st.seen.slice(-Math.floor(pool.length * 0.7)));
+      let best = 0, bestV = Infinity;
+      pool.forEach((q, i) => {
+        if (recent.has(i)) return;
+        const v = Math.abs((q.d || 1200) - st.r) + Math.random() * 250;
+        if (v < bestV) { bestV = v; best = i; }
+      });
+      return best;
+    },
+    // Elo against the puzzle's difficulty; returns the change
+    rate(game, idx, d, ok) {
+      const all = trLoad(), st = train.stats(game);
+      const exp = 1 / (1 + Math.pow(10, (d - st.r) / 400)), K = st.n < 20 ? 40 : 24;
+      const delta = Math.round(K * ((ok ? 1 : 0) - exp));
+      st.r = Math.max(400, st.r + delta); st.n++;
+      if (ok) { st.ok++; st.streak++; st.best = Math.max(st.best, st.streak); } else st.streak = 0;
+      st.seen = [...st.seen.filter(x => x !== idx), idx].slice(-150);
+      all[game] = st; trSave(all);
+      return delta;
+    },
+    done(kind, id) { const all = trLoad(), list = all[kind] || []; if (!list.includes(id)) list.push(id); all[kind] = list; trSave(all); },
+    isDone(kind, id) { return (trLoad()[kind] || []).includes(id); }
+  };
+  window.gambitTrain = train;
+
   return { sound, slide, toast, confetti };
 })();
 </script>
@@ -1951,6 +1999,18 @@ const I18N = {
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
     bdLabel: 'Доска', bdSteel: 'Сталь', bdWood: 'Дерево', bdGreen: 'Турнир', bdMarble: 'Мрамор', bdOcean: 'Океан', bdRose: 'Роза',
+    trBtn: '🎯 Тренировки', trTitle: 'Тренировки', trTactics: 'Задачи', trStats: 'рейтинг {r} · решено {n} · лучшая серия {s}',
+    trStart: 'Начать', trOpen: 'Открыть', trDailyDone: 'Сегодняшняя уже решена ✓', trDailyNew: 'Новая задача каждый день',
+    trOpenings: 'Дебюты', trEndgames: 'Эндшпили', trForW: 'за белых', trForB: 'за чёрных', trMoves: '{n} ход.',
+    trGoalMate: 'мат', trGoalPromote: 'пешка в ферзи',
+    trTacTitle: 'Тактика · рейтинг {r} · серия {s}', trTacOk: 'Решено! Рейтинг {d}.', trTacFail: 'Решено, но с ошибкой. Рейтинг {d}.',
+    trTacShown: 'Это было решение. Рейтинг {d}.', trNext: 'Следующая',
+    trPlayW: 'Вы играете за белых, бот отвечает по теории.', trPlayB: 'Вы играете за чёрных, бот отвечает по теории.',
+    trProgress: 'Пройдено ходов: {k} из {n}', trOpenWrong: 'Это не по теории. Попробуйте другой ход.', trOpenHint: 'По теории здесь {m}.',
+    trOpenDone: 'Дебют пройден!', trOpenShown: 'Вот вся линия. Теперь попробуйте пройти её сами.', trShowRest: 'Показать линию',
+    trAgain: 'Ещё раз', trRestart: 'Заново', trEndGoalMate: 'Цель: поставить мат.', trEndGoalPromote: 'Цель: провести пешку в ферзи.',
+    trEndDone: 'Получилось! Эндшпиль выигран.', trEndFail: 'Не вышло: {r}. Попробуйте ещё раз.', trUnrated: 'Тренировка: рейтинг не меняется.',
+    trCkTask: 'Найдите комбинацию, которая выигрывает шашки.',
     pzBtn: '🧩 Задача дня', pzTitle: 'Задача дня №{n}', pzTaskW: 'Ход белых. Найдите выигрывающий ход.', pzTaskB: 'Ход чёрных. Найдите выигрывающий ход.',
     pzBrill: 'Здесь есть бриллиантовая жертва!', pzWrong: 'Не то. Попробуйте ещё раз.', pzRight: 'Верно! Продолжайте.',
     pzSolved: 'Решено! Завтра будет новая задача.', pzShown: 'Это было решение. Завтра будет новая задача.', pzShow: 'Показать решение', pzExit: 'Выйти',
@@ -2034,6 +2094,18 @@ const I18N = {
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
     bdLabel: 'Board', bdSteel: 'Steel', bdWood: 'Wood', bdGreen: 'Tournament', bdMarble: 'Marble', bdOcean: 'Ocean', bdRose: 'Rose',
+    trBtn: '🎯 Training', trTitle: 'Training', trTactics: 'Puzzles', trStats: 'rating {r} · solved {n} · best streak {s}',
+    trStart: 'Start', trOpen: 'Open', trDailyDone: "Today's is solved ✓", trDailyNew: 'A new puzzle every day',
+    trOpenings: 'Openings', trEndgames: 'Endgames', trForW: 'as White', trForB: 'as Black', trMoves: '{n} moves',
+    trGoalMate: 'mate', trGoalPromote: 'promote a pawn',
+    trTacTitle: 'Tactics · rating {r} · streak {s}', trTacOk: 'Solved! Rating {d}.', trTacFail: 'Solved, but with a mistake. Rating {d}.',
+    trTacShown: 'That was the solution. Rating {d}.', trNext: 'Next',
+    trPlayW: 'You play White; the bot answers by the book.', trPlayB: 'You play Black; the bot answers by the book.',
+    trProgress: 'Moves done: {k} of {n}', trOpenWrong: 'Not the book move. Try another one.', trOpenHint: 'The book move here is {m}.',
+    trOpenDone: 'Opening complete!', trOpenShown: 'That is the whole line. Now try it yourself.', trShowRest: 'Show the line',
+    trAgain: 'Again', trRestart: 'Restart', trEndGoalMate: 'Goal: checkmate.', trEndGoalPromote: 'Goal: promote a pawn.',
+    trEndDone: 'Well done! Endgame won.', trEndFail: 'Not this time: {r}. Try again.', trUnrated: 'Training: your rating does not change.',
+    trCkTask: 'Find the combination that wins pieces.',
     pzBtn: '🧩 Daily puzzle', pzTitle: 'Daily puzzle #{n}', pzTaskW: 'White to move. Find the winning move.', pzTaskB: 'Black to move. Find the winning move.',
     pzBrill: 'There is a brilliant sacrifice here!', pzWrong: 'Not that one. Try again.', pzRight: 'Correct! Keep going.',
     pzSolved: 'Solved! A new puzzle comes tomorrow.', pzShown: 'That was the solution. A new puzzle comes tomorrow.', pzShow: 'Show solution', pzExit: 'Exit',
@@ -2727,7 +2799,7 @@ function celebrate() {
   else fx.sound('lose');
 }
 function gameOver() {
-  if (puzzle) { render(); return; }
+  if (puzzle) { if (puzzle.kind === 'end') endgameOver(); render(); return; }
   finishRated(); recordGame(); celebrate(); analyze();
 }
 // ---------- Best-move hint (admin only) ----------
@@ -2842,10 +2914,15 @@ function maybeAuto() {
   }, isAutoFast() ? 20 : 250);
 }
 
-// ---------- Daily puzzle ----------
-// Positions from bot games where one move wins; each line was checked by the engine
+// ---------- Training: the daily puzzle, tactics, openings and endgames ----------
+// Puzzles come from bot games where one move wins; every line was checked by the engine
 const PUZZLES = [{"p":"r...kb...b..qp.r....pp.p...P.......N.Q...P.R...P..P..PP..K...B.R b - -1 0","s":["12-40","37-1","0-1"],"b":0,"c":"b"},{"p":".....b.rp.prkppp....................PB....q.....P.P..P.PR.R..Q.K b - -1 5","s":["42-45","61-54","45-37"],"b":0,"c":"b"},{"p":"r..q...rppk.p.b...np.....Q....BpP..............P.PP.KPP..R...BR. b - -1 1","s":["18-35","52-59","35-25"],"b":0,"c":"b"},{"p":"r.bqkbnrpppn..pp...p.....B.........Np.....N.....PPP..PPPR.BQK..R w KQkq -1 0","s":["35-20"],"b":0,"c":"w"},{"p":"........ppB....k...p...p..bP..........PPPb.......P..r..R..R....K b - 46 0","s":["41-27"],"b":0,"c":"b"},{"p":"....kbnrrppq.ppp...p.....B..........P.....N....PPPPP.PP.R.BK..R. b k -1 1","s":["10-18"],"b":0,"c":"b"},{"p":"Nnbk...r.p.p.ppp........p..n.....b.Nq.......B...PPPQ.PPPR...KB.R w KQ -1 4","s":["50-42"],"b":0,"c":"w"},{"p":"..k....r.q..bpp.p.p.b.....p...np...P....Q.......PPP.B.PPR....RK. w - -1 2","s":["52-16"],"b":0,"c":"w"},{"p":"r.......pppk...B......N...bP........q.b.........PPPK.PPPR.B....R w - -1 0","s":["22-5","0-5","15-36"],"b":1,"c":"w"},{"p":"r.b.kb.r.pq.ppppp..........pP..Q.P.N...PP...P.....P..PP.R...KB.R b KQkq -1 0","s":["10-42"],"b":0,"c":"b"},{"p":"r..q.bnr..pp.k.pb.p..pp.p...p.......P.....QB....PPPP.PPPRNB.K..R w KQ -1 0","s":["43-16"],"b":0,"c":"w"},{"p":"r.bq.kr.pppp.pp...nb.n.p....p.N...B.P.....N.....PPPP.PPPR.BQR.K. w - -1 0","s":["30-13"],"b":0,"c":"w"},{"p":"................p.....k..........................P....r.R.K..... b - -1 3","s":["54-62","58-51","62-56"],"b":0,"c":"b"},{"p":"r..qkb.r.p...pppp.p..p..P..nN...Q..P.B.....B.....P...PPPR..K...R w kq -1 0","s":["28-18","3-11","63-60","5-12","18-12"],"b":0,"c":"w"},{"p":"r.b.kb.rppp..ppp....p....B.........Q..P......q..PPP..P.PR.B.K..R b KQkq -1 1","s":["10-18","60-62","18-25"],"b":0,"c":"b"},{"p":"r.b....r......k.p.pPp...P...p.P....BP.................PP.....K.R w - -1 0","s":["35-28"],"b":0,"c":"w"},{"p":"......r......pp.Rr.b.....pkP..........p........PPP...PP......KR. w - -1 1","s":["49-33","26-27","16-17"],"b":0,"c":"w"},{"p":"....................pR..b..kP...P..P..p...p...P......K.......... b - -1 0","s":["42-50"],"b":0,"c":"b"},{"p":"....kb.r.ppbq.p..rp.pp..p...N..p...PP...P.N.P....PP....PR.Q..RK. w k -1 0","s":["28-22"],"b":0,"c":"w"},{"p":".r.r...k..P.....pp..bN.p................P....p.PKP...PP.R.R..... w - -1 3","s":["48-57"],"b":0,"c":"w"},{"p":".........................pK......P..pk...P.............P........ b - -1 2","s":["36-44"],"b":0,"c":"b"},{"p":"....kb.r....pppp.p........ppN...r.....B.....P...p.P..P.PR...K..R w KQk -1 0","s":["38-11","4-3","11-32"],"b":0,"c":"w"},{"p":".....b.r.b...k.pr...pnp......p...........P.q.N..PP.P.PPPR.BQ.RK. w - -1 1","s":["45-28","13-6","28-43"],"b":0,"c":"w"},{"p":".rb...Q.p...kr..qp.p.......Pp....P......P...B..P..P..P...K.R.... w - -1 1","s":["44-30","13-21","30-21","12-21","6-5"],"b":0,"c":"w"},{"p":"rq..k...p.p.b....p.p.p.....P...r.Q.........B....PPPP.PP.R.B..K.. w q -1 2","s":["43-22","4-5","22-31"],"b":0,"c":"w"},{"p":"............k....P...........p...P........r...P......P.P......K. w - -1 0","s":["17-9","42-58","62-54"],"b":0,"c":"w"},{"p":".B..k.nr.p.b..pp...p....q...pp............P.PN..P.P..PPPR...KB.R b KQk -1 2","s":["24-42","45-51","42-56"],"b":0,"c":"b"},{"p":"..kr.b.rp..qpppp...p.n.....Bn.Q...........N.P...PPPP.P.PR.B.K..R b KQ -1 4","s":["21-27"],"b":0,"c":"b"},{"p":"........r..........k........p..p..K.B..p..N.....P............... w - -1 0","s":["42-25"],"b":0,"c":"w"},{"p":"rnbq.b.rpp.k.ppp..p..........p............N..N..PPPPQPPPR.B.K..R w KQ -1 2","s":["45-28","11-10","28-13"],"b":0,"c":"w"},{"p":"r.bqkb.r.p.pnpp.p.p.p...Q......p....P.....N..N..PPnP.PPPR.BK.B.R w kq -1 0","s":["24-3"],"b":0,"c":"w"},{"p":"r..k.b.rppp..ppp..n.......nNp.........b.....B...PPP.NPPP..KR.B.R w - -1 3","s":["27-17"],"b":1,"c":"w"},{"p":"r..q...rpppkppbp..p...p.....Pb..........P.P..N.P.PPB.PP.R..QK..R w KQ -1 3","s":["51-23"],"b":1,"c":"w"},{"p":"rn.qkb.rp...pppp..p......N.p.b.....PnB.......N..PPP.PPPPR..QKB.R w KQkq -1 0","s":["25-10"],"b":0,"c":"w"},{"p":"r.b.k.nrpp...ppp...pp............nPPq...P....N...P..QPPPR.B.KB.R b KQkq -1 2","s":["33-50","60-59","36-52","61-52","50-56"],"b":0,"c":"b"},{"p":".....k.rp....ppp..........pR....Pr......b...P..P..P.KPP..R...... w - -1 1","s":["57-33","26-33","27-3","5-12","3-7"],"b":0,"c":"w"},{"p":"........p.p...b...p....p..Pk..p.......P...P.K..PPB.............. w - -1 2","s":["42-34","27-34","49-14"],"b":0,"c":"w"},{"p":"..r..b.rp..kp.p.p.p...........P.......qpP.NN.....PP..P.PR.B..K.R w - -1 4","s":["43-28","11-10","28-38"],"b":0,"c":"w"},{"p":"r.b.k.nr.p...pQpp...p......p.....n......q...BN..N.P.PPPPK..R.B.R w kq -1 5","s":["14-49","40-49","56-49"],"b":1,"c":"w"},{"p":"r.b..rk..ppn..p..q......p..RP.......B....Q......P.P..PPP....R.K. w - -1 6","s":["27-25"],"b":1,"c":"w"},{"p":"r.b.k..rppp..ppp...bp......q.....n.P.....Q......PPP.NPPPR.B.KB.R b KQkq -1 5","s":["27-41","50-41","33-50","60-59","50-56"],"b":0,"c":"b"},{"p":"r..r..k.p.p..pp...b........pp..Q...BP......B....P.P..PKP........ w - -1 0","s":["31-28"],"b":0,"c":"w"},{"p":"r.bqk..rppp..ppp....p............b.........QBN..PPP..PPP....RK.R w kq -1 2","s":["43-25","4-5","25-33"],"b":0,"c":"w"},{"p":"..........R...prk..b....p...p..p.......P..N......KP..PP......... w - -1 1","s":["10-18","16-9","18-19"],"b":0,"c":"w"},{"p":"r.br..k.pqp..ppp.........p..n...........B.PBN...P..Q.PPP.R...RK. w - -1 6","s":["43-15","6-15","51-3"],"b":1,"c":"w"},{"p":"r.b..k.rpppn..p....bqp.p.N..p.....P.P...P...QN...P...PPP.K.R.B.R w - -1 1","s":["59-19","10-19","25-10"],"b":0,"c":"w"},{"p":"..br..k..p.p.p.p....p.p.p.....q.P..Q.......N...P.PPnBPP...KR...R b - -1 8","s":["51-41","58-57","41-35"],"b":1,"c":"b"},{"p":"k.....r..p....ppp..PR.p.P.........P......n....PP.P...P........K. w - -1 1","s":["19-11","0-8","20-4","41-24","4-6"],"b":0,"c":"w"},{"p":"rq...b.rpppkpppp....b..............PN..........PnPPN.PP.R.BQ.RK. w - -1 0","s":["36-26","11-2","26-20"],"b":0,"c":"w"},{"p":"...rk..rppp..ppp....b...qn.......P..p....P..P..P.BQ..PP.R...KB.R b KQk -1 0","s":["24-33"],"b":0,"c":"b"},{"p":".rbqkb.rp.pppppp.p...n....nP.....PPQ....P.N..N......PPPPR.B.KB.R b KQk 41 0","s":["26-41"],"b":0,"c":"b"},{"p":"r..qkb.r.bpnpppp.p.p....p..........Pn.....NQ.N..PPP.BPPPR.B.K..R w KQkq -1 0","s":["42-36"],"b":0,"c":"w"},{"p":"............k.......P.......K...p.P...P........P.....n.......... b - -1 1","s":["32-40"],"b":0,"c":"b"},{"p":"rnbq...Qppppkr.p............Pp......n...........PPPN.PPPR.B.KB.R w KQ -1 5","s":["7-3"],"b":0,"c":"w"},{"p":"r..qkb.r.b...p............p..Qpp.p..p.........B.PPP..PPPR...K.NR w KQkq -1 0","s":["29-28","3-12","28-7"],"b":0,"c":"w"},{"p":".............k.p............R..NP......P.....PP...r..b.K........ b - -1 1","s":["53-35"],"b":0,"c":"b"},{"p":"r.b.kb.rppp..ppp..n....n...qp.......NB.....P.N..PPP..PPPR..QKB.R w KQkq 20 0","s":["37-23"],"b":0,"c":"w"},{"p":"...rkbr..ppq.pppn........B.p.p..p..P...PP.N.BP...PP..PP...KR..R. b - -1 1","s":["10-18"],"b":0,"c":"b"},{"p":"........p.pk.pp.....b......p...r...P.b.PP.N..N...rP..P.P...KR..R b - -1 0","s":["20-38"],"b":0,"c":"b"},{"p":"r.b.kb.rpppq.pp...np.n...B.p...p....P.....N..N..PPP..PPPR.BQ.K.R w kq -1 0","s":["36-27"],"b":0,"c":"w"},{"p":"r.b.kbn.pppqppp..........B.p...r...N......N.P...PPP..PPPR.B.K..R b KQq -1 2","s":["10-18"],"b":0,"c":"b"},{"p":"...k.b.q..p.p....p.........P.Q...P...P..P...P.........Pr...R..K. b - -1 0","s":["55-63","62-53","63-59"],"b":1,"c":"b"}];
-let puzzle = null, startPos = null; // startPos: where the game began, when not the usual start
+// The tactics trainer's pool, each with a difficulty `d` on the Elo scale
+const TACTICS = [{"p":"r..q...rppk.p.b...np.....Q....BpP..............P.PP.KPP..R...BR. b - -1 1","s":["18-35","52-59","35-25"],"b":0,"c":"b","d":1150},{"p":"r.b.k.nr.ppp.ppp.....q..p.b.p......nP.Q...NB...NPPPP.PPPR.B.K..R w KQkq -1 6","s":["42-27","21-19","38-14"],"b":0,"c":"w","d":1350},{"p":"r.bk.b.r.....ppp.p..pn...pp......PQ..P......P....P.K..PPRN...B.R w - -1 0","s":["34-43","21-27","56-0"],"b":0,"c":"w","d":1150},{"p":".....k.rp....ppp..........pR....Pr......b...P..P..P.KPP..R...... w - -1 1","s":["57-33","26-33","27-3","5-12","3-7"],"b":0,"c":"w","d":1300},{"p":"rnb.kb.rpp..pppp..p....nq..NP......P.......B.N.PPPP..PP.R.BQK..R w KQq -1 1","s":["27-42"],"b":0,"c":"w","d":1200},{"p":"r..r..k.p.p..pp...b........pp..Q...BP......B....P.P..PKP........ w - -1 0","s":["31-28"],"b":0,"c":"w","d":1000},{"p":"r.......pppk...B......N...bP........q.b.........PPPK.PPPR.B....R w - -1 0","s":["22-5","0-5","15-36"],"b":1,"c":"w","d":1350},{"p":"r..k...rpp.....p.q..bp.b.Q......................PPP..PPP.K..RB.R w - -1 0","s":["25-17","8-17","60-20"],"b":0,"c":"w","d":1150},{"p":"r...kb.rppp.pppp..n..n...Q.p.q.....P........P...PPPN.PPPRNB.K..R w KQkq -1 4","s":["25-9","0-1","9-18"],"b":0,"c":"w","d":1150},{"p":"..r..k.r..Bn.pp........p...B........PP..P............P....R.K... w - -1 7","s":["10-19","5-6","58-2"],"b":0,"c":"w","d":1150},{"p":"k.....r..p....ppp..PR.p.P.........P......n....PP.P...P........K. w - -1 1","s":["19-11","0-8","20-4","41-24","4-6"],"b":0,"c":"w","d":1500},{"p":"r.bqk..rppp..ppp....pn.....p.nB..b.P......NQ.N..PPP.PPPPR...KBR. w Qkq -1 2","s":["43-25","2-11","25-33"],"b":0,"c":"w","d":1150},{"p":"r..qkb.r.b...p............p..Qpp.p..p.........B.PPP..PPPR...K.NR w KQkq -1 0","s":["29-28","3-12","28-7"],"b":0,"c":"w","d":1150},{"p":"r.b.kb.rpppq.pp...np.n...B.p...p....P.....N..N..PPP..PPPR.BQ.K.R w kq -1 0","s":["36-27"],"b":0,"c":"w","d":1000},{"p":"..bq.b.rr.ppkpppp...p......n......QP......B.PN..PP...PPPR...KB.R w KQ -1 3","s":["34-26","11-19","26-8"],"b":0,"c":"w","d":1150},{"p":"......kr...P.p.pp.............p.P.K..p............P............. w - 22 0","s":["11-3-Q","6-14","3-30"],"b":0,"c":"w","d":1150},{"p":"rnbq.k.rpp...Bpp.....n....p.N...........B.b.....P.PP..PPR..QK..R w KQ 18 0","s":["40-26"],"b":0,"c":"w","d":1000},{"p":"................p.....k..........................P....r.R.K..... b - -1 3","s":["54-62","58-51","62-56"],"b":0,"c":"b","d":1150},{"p":".k.r......p...r........p..PB..p.....Rp.......P.P.K....P......... w - -1 3","s":["36-33","1-2","27-20","3-11","26-18"],"b":0,"c":"w","d":1300},{"p":"r.b.k.nr.p...pQpp...p......p.....n......q...BN..N.P.PPPPK..R.B.R w kq -1 5","s":["14-49","40-49","56-49"],"b":1,"c":"w","d":1550},{"p":"r.b..r...p.p.pppp..b.k....p.p...P.B.P......P.N.P.qP.QPP.R....RK. w - -1 0","s":["52-51","21-12","61-57","49-57","56-57"],"b":0,"c":"w","d":1500},{"p":"rq..k...p.p.b....p.p.p.....P...r.Q.........B....PPPP.PP.R.B..K.. w q -1 2","s":["43-22","4-5","22-31"],"b":0,"c":"w","d":1150},{"p":".rbqkb.rp.pppppp.p...n....nP.....PPQ....P.N..N......PPPPR.B.KB.R b KQk 41 0","s":["26-41"],"b":0,"c":"b","d":1200},{"p":"r.b.kb.rppp..ppp....p....B.........Q..P......q..PPP..P.PR.B.K..R b KQkq -1 1","s":["10-18","60-62","18-25"],"b":0,"c":"b","d":1350},{"p":".....rk..BR..ppp..Np.......R........q........N..PPK..nPP........ w - -1 1","s":["50-42"],"b":0,"c":"w","d":1200},{"p":"r...kb...b..qp.r....pp.p...P.......N.Q...P.R...P..P..PP..K...B.R b - -1 0","s":["12-40","37-1","0-1"],"b":0,"c":"b","d":1350},{"p":"r.b.k..rp.p..ppp...bp....p.........nN..q...P....PPP.BPPPR.BQK..R w KQkq -1 1","s":["58-30","39-55","63-55"],"b":0,"c":"w","d":1350},{"p":".............k.p............R..NP......P.....PP...r..b.K........ b - -1 1","s":["53-35"],"b":0,"c":"b","d":1000},{"p":"r.b.k.nrp.pp.ppp..p......NB.....P................PP.PP.PR..QKB.q w Qkq -1 0","s":["25-10"],"b":0,"c":"w","d":1000},{"p":"Nnbk...r.p.p.ppp........p..n.....b.Nq.......B...PPPQ.PPPR...KB.R w KQ -1 4","s":["50-42"],"b":0,"c":"w","d":1200},{"p":"r.b.kbn.pppqppp..........B.p...r...N......N.P...PPP..PPPR.B.K..R b KQq -1 2","s":["10-18"],"b":0,"c":"b","d":1200},{"p":"r....b.rp.p...pp.pnpk..n...N........P..B........PPP..PPP...RK..R w K -1 2","s":["27-10","20-11","10-0"],"b":0,"c":"w","d":1150},{"p":"r.b.k.nrpp...ppp...pp............nPPq...P....N...P..QPPPR.B.KB.R b KQkq -1 2","s":["33-50","60-59","36-52","61-52","50-56"],"b":0,"c":"b","d":1300},{"p":"........p.pk.pp.....b......p...r...P.b.PP.N..N...rP..P.P...KR..R b - -1 0","s":["20-38"],"b":0,"c":"b","d":1200},{"p":".r....k.ppp...b...n.bq.pPB..p...............BN....P..PPP.K..Q..R b - -1 5","s":["28-36","45-35","18-35","44-35","21-35"],"b":0,"c":"b","d":1500},{"p":"........r..........k........p..p..K.B..p..N.....P............... w - -1 0","s":["42-25"],"b":0,"c":"w","d":1000},{"p":"r.b.k.nrpppp.ppp..nb..q....Np.N....PP..P........PPP..PP.R.BQKB.R w KQkq -1 3","s":["39-31"],"b":0,"c":"w","d":1200},{"p":"..kr.b.rp..qpppp...p.n.....Bn.Q...........N.P...PPPP.P.PR.B.K..R b KQ -1 4","s":["21-27"],"b":0,"c":"b","d":1000},{"p":"rnbq.b.rpp.k.ppp..p..........p............N..N..PPPPQPPPR.B.K..R w KQ -1 2","s":["45-28","11-10","28-13"],"b":0,"c":"w","d":1150},{"p":"...rk..rppp..ppp....b...qn.......P..p....P..P..P.BQ..PP.R...KB.R b KQk -1 0","s":["24-33"],"b":0,"c":"b","d":1000},{"p":"r..k.b.r.pp.ppppp.nqb......pN...Q..P......P.N.P.PP..P.PP..KR.B.R w - -1 3","s":["44-29","19-28","35-28"],"b":1,"c":"w","d":1550},{"p":"........ppB....k...p...p..bP..........PPPb.......P..r..R..R....K b - 46 0","s":["41-27"],"b":0,"c":"b","d":1000},{"p":"........p.p...b...p....p..Pk..p.......P...P.K..PPB.............. w - -1 2","s":["42-34","27-34","49-14"],"b":0,"c":"w","d":1150},{"p":"r.bqk.nrp....p.p..p.p.........N..b.Np...........PPP.KPPPR.BQ...R b kq -1 2","s":["2-16","52-44","3-30"],"b":0,"c":"b","d":1150},{"p":"r..q.r.kppp..p.p...b.p...BnP.........p....Q.B...PPP..P.PR....KR. w - -1 0","s":["44-26","19-26","42-26"],"b":0,"c":"w","d":1150},{"p":"..........R...prk..b....p...p..p.......P..N......KP..PP......... w - -1 1","s":["10-18","16-9","18-19"],"b":0,"c":"w","d":1150},{"p":"r....br.p.pkpppp..pq.......p.......Pn....P..PP..P.Q...PPR.B..RK. b - -1 0","s":["36-21"],"b":0,"c":"b","d":1200},{"p":".........................pK......P..pk...P.............P........ b - -1 2","s":["36-44"],"b":0,"c":"b","d":1200},{"p":".B..k.nr.p.b..pp...p....q...pp............P.PN..P.P..PPPR...KB.R b KQk -1 2","s":["24-42","45-51","42-56"],"b":0,"c":"b","d":1150},{"p":"r.bqkb.r.p.pnpp.p.p.p...Q......p....P.....N..N..PPnP.PPPR.BK.B.R w kq -1 0","s":["24-3"],"b":0,"c":"w","d":1000},{"p":"r..q...rpppkppbp..p...p.....Pb..........P.P..N.P.PPB.PP.R..QK..R w KQ -1 3","s":["51-23"],"b":1,"c":"w","d":1200},{"p":"....................pR..b..kP...P..P..p...p...P......K.......... b - -1 0","s":["42-50"],"b":0,"c":"b","d":1200},{"p":"r.bqk..rpppp.ppp..nn.......N......Bp..Q.........PPPP.PPPR.B..RK. w kq -1 2","s":["38-14","13-29","61-60","19-36","14-7"],"b":0,"c":"w","d":1300},{"p":"r.br..k.ppq..ppp....pn......N......QP...P.N....PPBP..PP.R....RK. w - -1 3","s":["42-25"],"b":0,"c":"w","d":1200},{"p":"...k.b.q..p.p....p.........P.Q...P...P..P...P.........Pr...R..K. b - -1 0","s":["55-63","62-53","63-59"],"b":1,"c":"b","d":1350},{"p":"rnb...r.ppk..p.p.....Q..q.b.P................N..P.P..PPPR..K.B.R w - -1 0","s":["21-13","1-11","13-6"],"b":0,"c":"w","d":1150},{"p":"......k.........P....p......p......p.p.P...b.......N.PPK........ w - -1 0","s":["16-8"],"b":0,"c":"w","d":1200},{"p":"..kr.b.r.pp.p.p.....q..pB....p.....P....P....Q...PR..PPP.....K.R b - -1 1","s":["20-16","50-52","16-24"],"b":0,"c":"b","d":1150},{"p":"rn.qkb.rp...pppp..p......N.p.b.....PnB.......N..PPP.PPPPR..QKB.R w KQkq -1 0","s":["25-10"],"b":0,"c":"w","d":1000},{"p":"............k....P...........p...P........r...P......P.P......K. w - -1 0","s":["17-9","42-58","62-54"],"b":0,"c":"w","d":1350},{"p":"..k....r.q..bpp.p.p.b.....p...np...P....Q.......PPP.B.PPR....RK. w - -1 2","s":["52-16"],"b":0,"c":"w","d":1000},{"p":"....kb.r.ppbq.p..rp.pp..p...N..p...PP...P.N.P....PP....PR.Q..RK. w k -1 0","s":["28-22"],"b":0,"c":"w","d":1200},{"p":"r..q.bnr..pp.k.pb.p..pp.p...p.......P.....QB....PPPP.PPPRNB.K..R w KQ -1 0","s":["43-16"],"b":0,"c":"w","d":1000},{"p":".....b.rp.prkppp....................PB....q.....P.P..P.PR.R..Q.K b - -1 5","s":["42-45","61-54","45-37"],"b":0,"c":"b","d":1150},{"p":"r..k.b.rppp..ppp..n.......nNp.........b.....B...PPP.NPPP..KR.B.R w - -1 3","s":["27-17"],"b":1,"c":"w","d":1200},{"p":"r.b....r......k.p.pPp...P...p.P....BP.................PP.....K.R w - -1 0","s":["35-28"],"b":0,"c":"w","d":1000},{"p":"..br..k..p.p.p.p....p.p.p.....q.P..Q.......N...P.PPnBPP...KR...R b - -1 8","s":["51-41","58-57","41-35"],"b":1,"c":"b","d":1350},{"p":".r.r...k..P.....pp..bN.p................P....p.PKP...PP.R.R..... w - -1 3","s":["48-57"],"b":0,"c":"w","d":1200},{"p":".......k.................r...pR............p.PBPbb...R........K. w - -1 2","s":["53-49","25-49","46-28"],"b":0,"c":"w","d":1150},{"p":".rb..b.r.ppq.p..p....p....kR....P.........N....P.PN..PP.R.B...K. b - -1 0","s":["11-27"],"b":1,"c":"b","d":1200},{"p":"r.b..k.rpppn..p....bqp.p.N..p.....P.P...P...QN...P...PPP.K.R.B.R w - -1 1","s":["59-19","10-19","25-10"],"b":0,"c":"w","d":1150},{"p":"r...k..rppp..pb..qn..n...B..p.Np.B..p...........PPP.QPPP.K.R...R w kq -1 0","s":["52-34","7-5","33-5"],"b":0,"c":"w","d":1350},{"p":"..kq.b..r.p.p.p...p.bp..pB..N..........R.P..B...P.P..PP.R...K... w Q -1 0","s":["28-18","3-27","18-8"],"b":0,"c":"w","d":1150},{"p":"......r......pp.Rr.b.....pkP..........p........PPP...PP......KR. w - -1 1","s":["49-33","26-27","16-17"],"b":0,"c":"w","d":1150},{"p":"....kb.r....pppp.p........ppN...r.....B.....P...p.P..P.PR...K..R w KQk -1 0","s":["38-11","4-3","11-32"],"b":0,"c":"w","d":1150},{"p":"rnbq...Qppppkr.p............Pp......n...........PPPN.PPPR.B.KB.R w KQ -1 5","s":["7-3"],"b":0,"c":"w","d":1000},{"p":"..q....kr..R..R.p........p.p......p...P.P......P.PPB..........K. b - -1 0","s":["8-11","14-11","2-11"],"b":0,"c":"b","d":1150},{"p":"...rkbr..ppq.pppn........B.p.p..p..P...PP.N.BP...PP..PP...KR..R. b - -1 1","s":["10-18"],"b":0,"c":"b","d":1200},{"p":"..b....r.r.pkNpp....p.....p.n...Q.....q.....P...P.PK..PPRN...B.R w - -1 1","s":["32-38","28-38","13-7","38-53","63-62"],"b":0,"c":"w","d":1300},{"p":".rb...Q.p...kr..qp.p.......Pp....P......P...B..P..P..P...K.R.... w - -1 1","s":["44-30","13-21","30-21","12-21","6-5"],"b":0,"c":"w","d":1300},{"p":"....kbnrrppq.ppp...p.....B..........P.....N....PPPPP.PP.R.BK..R. b k -1 1","s":["10-18"],"b":0,"c":"b","d":1200},{"p":"rq...b.rpppkpppp....b..............PN..........PnPPN.PP.R.BQ.RK. w - -1 0","s":["36-26","11-2","26-20"],"b":0,"c":"w","d":1150},{"p":"r.br..k.pqp..ppp.........p..n...........B.PBN...P..Q.PPP.R...RK. w - -1 6","s":["43-15","6-15","51-3"],"b":1,"c":"w","d":1350},{"p":"..Q..........k.pp...pn...q........NP....P............P....K..... w - -1 3","s":["34-19","13-12","19-25"],"b":0,"c":"w","d":1150},{"p":"r.b.kb.r.pq.ppppp..........pP..Q.P.N...PP...P.....P..PP.R...KB.R b KQkq -1 0","s":["10-42"],"b":0,"c":"b","d":1000},{"p":"r.b.k..rppp..ppp...bp......q.....n.P.....Q......PPP.NPPPR.B.KB.R b KQkq -1 5","s":["27-41","50-41","33-50","60-59","50-56"],"b":0,"c":"b","d":1300},{"p":"r.b.kb.rppp..ppp..n....n...qp.......NB.....P.N..PPP..PPPR..QKB.R w KQkq 20 0","s":["37-23"],"b":0,"c":"w","d":1000},{"p":"....kb.rprp.q..p...p.n........p....QP..PP.N......PP..PP.R...K..R w KQ -1 0","s":["39-30"],"b":0,"c":"w","d":1000},{"p":"..r..b.rp..kp.p.p.p...........P.......qpP.NN.....PP..P.PR.B..K.R w - -1 4","s":["43-28","11-10","28-38"],"b":0,"c":"w","d":1150},{"p":"r..qkb.r.p...pppp.p..p..P..nN...Q..P.B.....B.....P...PPPR..K...R w kq -1 0","s":["28-18","3-11","63-60","5-12","18-12"],"b":0,"c":"w","d":1300},{"p":"...k..r...RP..pp.r.......b.R.....b..............PPP..PPP.K...... w - -1 1","s":["10-2","3-12","2-6","25-11","6-14"],"b":1,"c":"w","d":1500},{"p":"r.bqkbnrpppn..pp...p.....B.........Np.....N.....PPP..PPPR.BQK..R w KQkq -1 0","s":["35-20"],"b":0,"c":"w","d":1200},{"p":"............k.......P.......K...p.P...P........P.....n.......... b - -1 1","s":["32-40"],"b":0,"c":"b","d":1200},{"p":"r.....krpBp..p.p....bp.............q....P.pP.....P...PPPRQ...K.R b - -1 0","s":["42-49"],"b":0,"c":"b","d":1000},{"p":"r.b..rk..ppn..p..q......p..RP.......B....Q......P.P..PPP....R.K. w - -1 6","s":["27-25"],"b":1,"c":"w","d":1200},{"p":"r.bq.kr.pppp.pp...nb.n.p....p.N...B.P.....N.....PPPP.PPPR.BQR.K. w - -1 0","s":["30-13"],"b":0,"c":"w","d":1000},{"p":"..R..rk.pp...p..........bP.....p.P...................PP.....KR.. b - 41 0","s":["24-33","60-52","5-2"],"b":0,"c":"b","d":1150},{"p":"..r.kb...pp.n..pp.....B.....N..b..Pq.Q..........PP...PrPR...KR.. b Q -1 3","s":["12-22","37-13","4-3","13-21","3-4"],"b":0,"c":"b","d":1300},{"p":"r..qkb.r.bpnpppp.p.p....p..........Pn.....NQ.N..PPP.BPPPR.B.K..R w KQkq -1 0","s":["42-36"],"b":0,"c":"w","d":1000},{"p":"...k......p..pp....q...pp........r.....P....Q...PPP.K.P........R w - -1 6","s":["63-59"],"b":1,"c":"w","d":1400},{"p":".....b.r.b...k.pr...pnp......p...........P.q.N..PP.P.PPPR.BQ.RK. w - -1 1","s":["45-28","13-6","28-43"],"b":0,"c":"w","d":1150},{"p":"r.bqk..rppp..ppp....p............b.........QBN..PPP..PPP....RK.R w kq -1 2","s":["43-25","4-5","25-33"],"b":0,"c":"w","d":1150}];
+// Opening lines (the bot plays the book answers) and won endgames to finish against the engine
+const TRAIN = {"openings":[{"id":"italian","side":"w","ru":"Итальянская партия","en":"Italian Game","iru":"Слон с c4 целится в f7, а пешки c3 и d4 захватывают центр.","ien":"The c4 bishop eyes f7 while the c3 and d4 pawns take the centre.","s":["52-36","12-28","62-45","1-18","61-34","5-26","50-42","6-21","51-35","28-35","42-35","26-33","58-51","33-51","57-51","11-27"]},{"id":"ruy","side":"w","ru":"Испанская партия","en":"Ruy Lopez","iru":"Слон b5 давит на коня c6, который защищает пешку e5.","ien":"The b5 bishop presses on the c6 knight, the defender of e5.","s":["52-36","12-28","62-45","1-18","61-25","8-16","25-32","6-21","60-62","5-12","61-60","9-25","32-41","11-19","50-42","4-6"]},{"id":"qgd","side":"w","ru":"Ферзевый гамбит","en":"Queen's Gambit","iru":"Пешка c4 подрывает центр чёрных, белые быстро развивают фигуры.","ien":"The c4 pawn undermines Black's centre while White develops quickly.","s":["51-35","11-27","50-34","12-20","57-42","6-21","58-30","5-12","52-44","4-6","62-45","1-11"]},{"id":"london","side":"w","ru":"Лондонская система","en":"London System","iru":"Одна надёжная расстановка почти против всего: слон f4 и пешки d4, e3, c3.","ien":"One solid set-up against almost anything: bishop on f4, pawns on d4, e3 and c3.","s":["51-35","11-27","58-37","6-21","52-44","12-20","62-45","10-26","50-42","1-18","57-51","5-19","37-46","4-6","61-43"]},{"id":"sicilian","side":"b","ru":"Сицилианская защита (Найдорф)","en":"Sicilian Defence (Najdorf)","iru":"Чёрные меняют фланговую пешку c на центральную d и получают полуоткрытую линию c.","ien":"Black trades the c-pawn for White's d-pawn and gets the half-open c-file.","s":["52-36","10-26","62-45","11-19","51-35","26-35","45-35","6-21","57-42","8-16"]},{"id":"french","side":"b","ru":"Французская защита","en":"French Defence","iru":"Прочная цепь пешек e6 и d5; центр белых чёрные подрывают позже.","ien":"A solid e6-d5 pawn chain; Black strikes at White's centre later.","s":["52-36","12-20","51-35","11-27","57-42","6-21","58-30","5-12","36-28","21-11","30-12","3-12"]},{"id":"caro","side":"b","ru":"Защита Каро-Канн","en":"Caro-Kann Defence","iru":"Чёрные выводят слона на f5 до хода e6 и получают крепкую позицию.","ien":"Black gets the bishop out to f5 before playing e6, with a sound position.","s":["52-36","10-18","51-35","11-27","57-42","27-36","42-36","2-29","36-46","29-22","55-39","15-23","62-45","1-11"]},{"id":"scandi","side":"b","ru":"Скандинавская защита","en":"Scandinavian Defence","iru":"Чёрные сразу бьют в центр, а ферзь уходит на безопасное поле a5.","ien":"Black hits the centre at once and the queen retreats to the safe a5 square.","s":["52-36","11-27","36-27","3-27","57-42","27-24","51-35","6-21","62-45","2-29"]}],"endgames":[{"id":"kq","goal":"mate","lvl":1,"ru":"Ферзь против короля","en":"Queen against king","iru":"Оттесните короля на край доски ферзём и подведите своего короля. Берегитесь пата!","ien":"Drive the king to the edge with the queen and bring your own king up. Beware of stalemate!","p":"............................k..............................QK... w - -1 0"},{"id":"rr","goal":"mate","lvl":1,"ru":"Две ладьи: лестничный мат","en":"Two rooks: the ladder mate","iru":"Ладьи по очереди отрезают короля, ряд за рядом, пока он не окажется на краю.","ien":"The rooks take turns cutting the king off, rank by rank, until he reaches the edge.","p":"...................k....................................R...K..R w - -1 0"},{"id":"kr","goal":"mate","lvl":2,"ru":"Ладья против короля","en":"Rook against king","iru":"Ладья отрезает короля, ваш король идёт навстречу и встаёт в оппозицию.","ien":"The rook cuts the king off; your king walks up and takes the opposition.","p":"............................k...........................R...K... w - -1 0"},{"id":"kp","goal":"promote","lvl":2,"ru":"Пешка в ферзи","en":"Pawn to queen","iru":"Король впереди пешки, на шестой горизонтали: так пешка проходит всегда.","ien":"Your king stands in front of the pawn on the sixth rank, which always wins.","p":"....k...............K.......P................................... w - -1 0"},{"id":"breakthrough","goal":"promote","lvl":2,"ru":"Пешечный прорыв","en":"Pawn breakthrough","iru":"Три пешки против трёх, короли далеко. Найдите жертву, после которой одна пешка проходит.","ien":"Three pawns against three, the kings far away. Find the sacrifice that lets one pawn through.","p":".......kppp.............PPP....................................K w - -1 0"},{"id":"bb","goal":"mate","lvl":3,"ru":"Два слона","en":"Two bishops","iru":"Слоны рядом режут доску по диагоналям, король помогает. Мат бывает только в углу.","ien":"Side-by-side bishops cut the board on diagonals with the king helping. Mate only happens in a corner.","p":"............................k.............................B.KB.. w - -1 0"}]};
+// The lesson in progress: { kind: 'daily' | 'tactic' | 'open' | 'end', ... }; startPos: where the game began
+let puzzle = null, startPos = null;
 function loadPos(str) {
   const [bd, turn, cr, ep, hm] = str.split(' ');
   const b = bd.split('').map(ch => (ch === '.' ? null : (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase()));
@@ -2854,86 +2931,173 @@ function loadPos(str) {
 const initial = () => (startPos ? loadPos(startPos) : newGame());
 const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
 function puzzleSolvedToday() { try { return localStorage.getItem('gambit-puzzle') === String(today()); } catch (e) { return false; } }
-function startPuzzle() {
-  if (!PUZZLES.length || thinking) return;
+const Tr = () => window.gambitTrain;
+// What to go back to when the lesson ends
+const trainPrev = () => (puzzle ? { prevMode: puzzle.prevMode, prevSide: puzzle.prevSide }
+  : { prevMode: modeSel.value === 'online' ? 'ai' : modeSel.value, prevSide: sideSel.value });
+
+// A line lesson: the daily puzzle, tactics and openings. The player's moves must follow `line`.
+function beginLine(kind, data) {
+  if (thinking) return;
   abandonRated();
   if (online()) net.leave();
-  const prevMode = modeSel.value === 'online' ? 'ai' : modeSel.value;
+  const prev = trainPrev();
   modeSel.value = 'pvp';
-  const day = today(), p = PUZZLES[day % PUZZLES.length];
   reset(false);
-  startPos = p.p; G = loadPos(p.p); keys = [posKey(G)];
-  puzzle = { p, k: 0, state: 'play', msg: '', day, prevMode };
-  flipped = G.turn === 'b';
+  if (data.pos) { startPos = data.pos; G = loadPos(data.pos); keys = [posKey(G)]; }
+  puzzle = { kind, ...data, ...prev, k: 0, state: 'play', msg: '', miss: 0, failed: false };
+  flipped = puzzle.color === 'b';
   render();
+  if (G.turn !== puzzle.color) lineReply(puzzle);
+}
+function startPuzzle() {
+  if (!PUZZLES.length) return;
+  const day = today(), p = PUZZLES[day % PUZZLES.length];
+  beginLine('daily', { line: p.s, color: p.c, pos: p.p, brill: !!p.b, day });
+}
+function startTactic() {
+  if (!TACTICS.length) return;
+  const idx = Tr().pick(TACTICS, 'chess'), p = TACTICS[idx];
+  beginLine('tactic', { line: p.s, color: p.c, pos: p.p, brill: !!p.b, idx, d: p.d || 1200 });
+}
+function startOpening(o) { beginLine('open', { ...o, line: o.s, color: o.side }); }
+// An endgame: played out against the engine at full strength, unrated
+function startEndgame(e) {
+  if (thinking) return;
+  abandonRated();
+  if (online()) net.leave();
+  const prev = trainPrev();
+  modeSel.value = 'ai'; sideSel.value = 'w';
+  reset(false);
+  startPos = e.p; G = loadPos(e.p); keys = [posKey(G)];
+  rs.unrated = 'trUnrated'; setNote(t('trUnrated'));
+  puzzle = { kind: 'end', ...e, ...prev, color: 'w', state: 'play', msg: '' };
+  flipped = false;
+  render();
+}
+function restartLesson() {
+  const pz = puzzle;
+  if (!pz) return;
+  if (pz.kind === 'end') startEndgame(TRAIN.endgames.find(e => e.id === pz.id));
+  else if (pz.kind === 'open') startOpening(TRAIN.openings.find(o => o.id === pz.id));
+  else if (pz.kind === 'tactic') startTactic();
+  else startPuzzle();
 }
 function exitPuzzle() {
   if (!puzzle) return;
-  modeSel.value = puzzle.prevMode;
+  modeSel.value = puzzle.prevMode; sideSel.value = puzzle.prevSide;
   reset(false);
 }
-// The player's move: the planned one (or any mate) goes ahead, anything else is refused
+// The engine defends the endgame as well as it can
+function defenderMove() {
+  const r = deepSearch(G, 600);
+  return r && r.move && legal(G).find(x => sameMove(x, r.move));
+}
+// The player's move in a line: the planned one (or, in a puzzle, any mate) goes ahead, anything else is refused
 function puzzleTry(m) {
-  const pz = puzzle;
-  if (encMove(m) === pz.p.s[pz.k]) { pz.k++; pz.msg = ''; return true; }
-  make(G, m);
-  const mate = !legal(G).length && inCheck(G, G.turn);
-  unmake(G);
-  if (mate) { pz.k = pz.p.s.length; return true; }
-  pz.msg = 'bad'; fx.sound('wrong');
+  const pz = puzzle, all = legal(G);
+  if (encMove(m) === pz.line[pz.k]) { pz.k++; pz.msg = ''; pz.miss = 0; return true; }
+  if (pz.kind !== 'open') {
+    make(G, m);
+    const mate = !legal(G).length && inCheck(G, G.turn);
+    unmake(G);
+    if (mate) { pz.k = pz.line.length; return true; }
+  }
+  pz.msg = 'bad'; pz.miss++; pz.failed = true; fx.sound('wrong');
+  const exp = all.find(x => encMove(x) === pz.line[pz.k]);
+  pz.hint = exp ? fmt(san(G, exp, all)) : '';
   sel = null; targets = []; pendingPromo = null;
   render();
   return false;
 }
-// After a correct move: the solution is complete, or the opponent answers
+// After a correct move: the line is complete, or the opponent answers
 function puzzleAfter() {
   const pz = puzzle;
   if (!pz || pz.state !== 'play') return;
-  if (pz.k >= pz.p.s.length) { finishPuzzle(true); return; }
-  pz.msg = 'good'; render();
+  if (pz.k >= pz.line.length) { finishPuzzle(true); return; }
+  if (pz.kind !== 'open') pz.msg = 'good';
+  render();
+  lineReply(pz);
+}
+function lineReply(pz) {
   setTimeout(() => {
     if (puzzle !== pz || pz.state !== 'play') return;
-    const r = legal(G).find(x => encMove(x) === pz.p.s[pz.k]);
+    const r = legal(G).find(x => encMove(x) === pz.line[pz.k]);
     if (!r) { finishPuzzle(true); return; }
     pz.k++; play(r, true);
-  }, 500);
+    // An opening line may end with the bot's move
+    if (pz.k >= pz.line.length) finishPuzzle(true);
+  }, 450);
 }
 function finishPuzzle(solved) {
   const pz = puzzle;
+  if (!pz || pz.state === 'solved' || pz.state === 'shown') return;
   pz.state = solved ? 'solved' : 'shown';
-  if (solved) {
-    try { localStorage.setItem('gambit-puzzle', String(pz.day)); } catch (e) {}
-    fx.sound('win'); fx.confetti(false);
-  }
+  if (pz.kind === 'daily') { if (solved) { try { localStorage.setItem('gambit-puzzle', String(pz.day)); } catch (e) {} } }
+  else if (pz.kind === 'tactic') pz.delta = Tr().rate('chess', pz.idx, pz.d, solved && !pz.failed);
+  else if (solved) Tr().done(pz.kind, pz.id);
+  if (solved) { fx.sound(pz.failed ? 'end' : 'win'); if (!pz.failed || pz.kind === 'end') fx.confetti(false); }
   render();
+}
+// The endgame ended on the board: mate is the only win for a mate lesson
+function endgameOver() {
+  const pz = puzzle;
+  if (pz.state !== 'play') return;
+  const key = gameResult().key;
+  if (key === (pz.color === 'w' ? 'mateW' : 'mateB')) finishPuzzle(true);
+  else { pz.state = 'failed'; pz.why = key; fx.sound('lose'); }
 }
 function showSolution() {
   const pz = puzzle;
-  if (!pz || pz.state !== 'play') return;
+  if (!pz || pz.state !== 'play' || !pz.line) return;
   pz.state = 'showing'; pz.msg = '';
   const step = () => {
     if (puzzle !== pz) return;
-    const m = pz.k < pz.p.s.length && legal(G).find(x => encMove(x) === pz.p.s[pz.k]);
-    if (!m) { finishPuzzle(false); return; }
+    const m = pz.k < pz.line.length && legal(G).find(x => encMove(x) === pz.line[pz.k]);
+    if (!m) { pz.state = 'play'; finishPuzzle(false); return; }
     pz.k++; play(m, true);
-    setTimeout(step, 700);
+    setTimeout(step, 650);
   };
   step();
 }
 function renderPuzzle() {
-  const el = $('puzzleBar'), btn = $('puzzleBtn');
-  btn.hidden = !PUZZLES.length;
-  btn.textContent = t('pzBtn') + (puzzleSolvedToday() ? ' ✓' : '');
+  const el = $('puzzleBar');
   if (!puzzle) { el.hidden = true; return; }
   el.hidden = false;
-  const pz = puzzle;
-  const msg = pz.state === 'solved' ? `<div class="pm good">${t('pzSolved')}</div>`
-    : pz.state === 'shown' ? `<div class="pm">${t('pzShown')}</div>`
-    : pz.msg === 'bad' ? `<div class="pm bad">${t('pzWrong')}</div>`
-    : pz.msg === 'good' ? `<div class="pm good">${t('pzRight')}</div>` : '';
-  el.innerHTML = `<div class="pt">${t('pzTitle', { n: pz.day % PUZZLES.length + 1 })}</div>
-    <div class="pm">${t(pz.p.c === 'w' ? 'pzTaskW' : 'pzTaskB')}${pz.p.b ? ' ' + t('pzBrill') : ''}</div>${msg}
-    <div class="btns">${pz.state === 'play' ? `<button class="b" data-pz="show">${t('pzShow')}</button>` : ''}<button class="b" data-pz="exit">${t('pzExit')}</button></div>`;
+  const pz = puzzle, done = pz.state === 'solved' || pz.state === 'shown' || pz.state === 'failed';
+  const name = pz[lang] || pz.ru, idea = pz['i' + lang] || pz.iru;
+  const task = t(pz.color === 'w' ? 'pzTaskW' : 'pzTaskB') + (pz.brill ? ' ' + t('pzBrill') : '');
+  const d = pz.delta > 0 ? '+' + pz.delta : String(pz.delta);
+  let title, text, msg = '';
+  if (pz.kind === 'daily') { title = t('pzTitle', { n: pz.day % PUZZLES.length + 1 }); text = task; }
+  else if (pz.kind === 'tactic') { const st = Tr().stats('chess'); title = t('trTacTitle', { r: st.r, s: st.streak }); text = task; }
+  else if (pz.kind === 'open') { title = name; text = `${idea} ${t(pz.color === 'w' ? 'trPlayW' : 'trPlayB')}<br>${t('trProgress', { k: pz.k, n: pz.line.length })}`; }
+  else { title = name; text = `${idea} ${t(pz.goal === 'mate' ? 'trEndGoalMate' : 'trEndGoalPromote')}`; }
+  if (pz.state === 'solved') msg = `<div class="pm good">${pz.kind === 'daily' ? t('pzSolved') : pz.kind === 'tactic' ? t(pz.failed ? 'trTacFail' : 'trTacOk', { d }) : t(pz.kind === 'open' ? 'trOpenDone' : 'trEndDone')}</div>`;
+  else if (pz.state === 'shown') msg = `<div class="pm">${pz.kind === 'tactic' ? t('trTacShown', { d }) : t(pz.kind === 'open' ? 'trOpenShown' : 'pzShown')}</div>`;
+  else if (pz.state === 'failed') msg = `<div class="pm bad">${t('trEndFail', { r: t(pz.why) })}</div>`;
+  else if (pz.msg === 'bad') msg = `<div class="pm bad">${pz.kind === 'open' ? (pz.miss >= 2 && pz.hint ? t('trOpenHint', { m: pz.hint }) : t('trOpenWrong')) : t('pzWrong')}</div>`;
+  else if (pz.msg === 'good') msg = `<div class="pm good">${t('pzRight')}</div>`;
+  const btns = [];
+  if (pz.state === 'play' && pz.line) btns.push(`<button class="b" data-pz="show">${t(pz.kind === 'open' ? 'trShowRest' : 'pzShow')}</button>`);
+  if (pz.kind === 'tactic' && done) btns.push(`<button class="b primary" data-pz="next">${t('trNext')}</button>`);
+  if ((pz.kind === 'open' || pz.kind === 'end') && (done || pz.kind === 'end')) btns.push(`<button class="b${done ? ' primary' : ''}" data-pz="again">${t(pz.kind === 'end' && !done ? 'trRestart' : 'trAgain')}</button>`);
+  btns.push(`<button class="b" data-pz="exit">${t('pzExit')}</button>`);
+  el.innerHTML = `<div class="pt">${title}</div><div class="pm">${text}</div>${msg}<div class="btns">${btns.join('')}</div>`;
+}
+
+// ---------- Training menu ----------
+function renderTrainMenu() {
+  const cs = Tr().stats('chess'), ks = Tr().stats('checkers');
+  const name = o => o[lang] || o.ru;
+  $('trBox').innerHTML = `<div class="modal-head"><h2 id="trTitle">${t('trTitle')}</h2><button class="b x" data-tr="close" aria-label="${t('cancel')}">×</button></div>
+    <div class="tr-sec"><h3>${t('trTactics')}</h3>
+      <div class="tr-row"><div><b>${t('gChess')}</b><div class="hint">${t('trStats', { r: cs.r, n: cs.ok, s: cs.best })}</div></div><button class="b primary" data-tr="tactic">${t('trStart')}</button></div>
+      <div class="tr-row"><div><b>${t('gCheckers')}</b><div class="hint">${t('trStats', { r: ks.r, n: ks.ok, s: ks.best })}</div></div><button class="b primary" data-tr="cktactic">${t('trStart')}</button></div>
+      <div class="tr-row"><div><b>${t('pzBtn')}</b><div class="hint">${t(puzzleSolvedToday() ? 'trDailyDone' : 'trDailyNew')}</div></div><button class="b" data-tr="daily">${t('trOpen')}</button></div>
+    </div>
+    <div class="tr-sec"><h3>${t('trOpenings')}</h3><div class="tr-grid">${TRAIN.openings.map((o, i) => `<button class="tr-card" data-tr="open" data-i="${i}"><b>${name(o)}${Tr().isDone('open', o.id) ? ' ✓' : ''}</b><span class="hint">${t(o.side === 'w' ? 'trForW' : 'trForB')} · ${t('trMoves', { n: Math.ceil(o.s.length / 2) })}</span></button>`).join('')}</div></div>
+    <div class="tr-sec"><h3>${t('trEndgames')}</h3><div class="tr-grid">${TRAIN.endgames.map((e, i) => `<button class="tr-card" data-tr="end" data-i="${i}"><b>${name(e)}${Tr().isDone('end', e.id) ? ' ✓' : ''}</b><span class="hint">${'★'.repeat(e.lvl)}${'☆'.repeat(3 - e.lvl)} · ${t(e.goal === 'mate' ? 'trGoalMate' : 'trGoalPromote')}</span></button>`).join('')}</div></div>`;
 }
 
 // A game from the history: replayed into two-player mode, so nothing is rated, and analysed
@@ -3005,7 +3169,7 @@ function reset(keepFlip) {
 }
 
 function play(m, remote) {
-  const pzMove = !!(puzzle && puzzle.state === 'play' && !remote);
+  const pzMove = !!(puzzle && puzzle.line && puzzle.state === 'play' && !remote);
   if (pzMove && !puzzleTry(m)) return;
   const all = legal(G);
   const notation = san(G, m, all);
@@ -3014,6 +3178,8 @@ function play(m, remote) {
   keys.push(posKey(G));
   fx.sound(inCheck(G, G.turn) ? 'check' : m.cap ? 'capture' : 'move');
   slideMv = { from: m.from, to: m.to };
+  // An endgame lesson about promotion is won as soon as the pawn queens
+  if (puzzle && puzzle.kind === 'end' && puzzle.state === 'play' && puzzle.goal === 'promote' && m.promo && m.p[0] === puzzle.color) finishPuzzle(true);
   // A person's move (not the bot's) gets checked for brilliance in the background
   if (m.p[0] !== aiColor()) { const ply = history.length - 1; setTimeout(() => checkBrilliant(ply, m), 30); }
   if (online() && !remote) net.push();
@@ -3027,9 +3193,10 @@ function play(m, remote) {
 
 function maybeAI() {
   if (G.turn !== aiColor() || gameResult().over) return;
+  if (puzzle && puzzle.kind === 'end' && puzzle.state !== 'play') return;
   thinking = true; render();
   setTimeout(() => {
-    const m = botMove(G, levelSel.value);
+    const m = puzzle && puzzle.kind === 'end' ? defenderMove() : botMove(G, levelSel.value);
     thinking = false;
     if (m) play(m); else render();
   }, 450);
@@ -3056,6 +3223,8 @@ function undo() {
 
 function onSquare(i) {
   if (thinking || pendingPromo || autoBusy) return;
+  // In a lesson only the player's own side moves, and nothing moves once it is over
+  if (puzzle && (puzzle.state !== 'play' || G.turn !== puzzle.color)) return;
   if (view !== null) { showPly(null); return; }
   const res = gameResult();
   if (res.over || G.turn === aiColor() || (online() && G.turn !== net.color())) return;
@@ -3238,9 +3407,29 @@ $('newBtn').addEventListener('click', () => {
 });
 $('puzzleBar').addEventListener('click', e => {
   const b = e.target.closest('[data-pz]');
-  if (b) (b.dataset.pz === 'show' ? showSolution : exitPuzzle)();
+  if (!b) return;
+  const a = b.dataset.pz;
+  if (a === 'show') showSolution();
+  else if (a === 'next') startTactic();
+  else if (a === 'again') restartLesson();
+  else exitPuzzle();
 });
-$('puzzleBtn').addEventListener('click', () => { if (window.gambitSetGame) window.gambitSetGame('chess'); startPuzzle(); });
+$('trainBtn').addEventListener('click', () => { renderTrainMenu(); $('trModal').hidden = false; });
+$('trModal').addEventListener('click', e => {
+  if (e.target === $('trModal')) { $('trModal').hidden = true; return; }
+  const b = e.target.closest('[data-tr]');
+  if (!b) return;
+  const a = b.dataset.tr;
+  $('trModal').hidden = true;
+  if (a === 'close') return;
+  if (a === 'cktactic') { window.gambitSetGame('checkers'); window.gambitCkTrain(); return; }
+  window.gambitSetGame('chess');
+  if (a === 'tactic') startTactic();
+  else if (a === 'daily') startPuzzle();
+  else if (a === 'open') startOpening(TRAIN.openings[+b.dataset.i]);
+  else if (a === 'end') startEndgame(TRAIN.endgames[+b.dataset.i]);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('trModal').hidden) $('trModal').hidden = true; });
 $('undoBtn').addEventListener('click', undo);
 $('flipBtn').addEventListener('click', () => { flipped = !flipped; render(); });
 $('resignBtn').addEventListener('click', resign);
@@ -3576,7 +3765,10 @@ function celebrate() {
   if (w === me) { fx.sound('win'); fx.confetti(rs.mode === 'online' || rs.level === 'impossible' || rs.level === 'hard'); }
   else fx.sound('lose');
 }
-function gameOver() { finishRated(); recordGame(); celebrate(); analyze(); }
+function gameOver() {
+  if (puzzle) { render(); return; }
+  finishRated(); recordGame(); celebrate(); analyze();
+}
 // Best-move hint (admin only)
 // ---------- Brilliant move, live (same test as the report) ----------
 let brillMark = null; // { ply, m, sq }
@@ -3821,9 +4013,92 @@ function renderReview() {
   $('ckRevNext').disabled = view >= hist.length - 1;
 }
 
+// ---------- Training: checkers puzzles ----------
+// Positions from bot games where a quiet move, usually a sacrifice, wins pieces by force
+const CK_TACTICS = [{"p":".......b....w..........w................b...b...........w....... w","s":["12-3","7-14","23-5"],"b":0,"c":"w","d":1150},{"p":".....b........b....b.b.bb.b......w...w.ww...w.w..w......w.w..... w","s":["49-42"],"b":0,"c":"w","d":1000},{"p":".b.b.b.bb...b......b...bb.w.b....w......w.w.w....w...w.w..w.w.w. b","s":["28-35"],"b":0,"c":"b","d":1000},{"p":".......bb..........b.b.b.............w.b....w....w.w....w.....w. w","s":["37-30","23-37","44-30-12-26"],"b":1,"c":"w","d":1400},{"p":"...B..........b..w..........................W......w............ w","s":["17-8"],"b":0,"c":"w","d":1000},{"p":"........b.....b........w.........w.B........................w... b","s":["14-21","60-51","35-53"],"b":0,"c":"b","d":1150},{"p":".....................W.b....w......w..........b...........B...w. b","s":["46-53","62-44","58-30-12"],"b":1,"c":"b","d":1400},{"p":".b.................w...b....b....w...w.w........................ w","s":["19-12","28-46","39-53"],"b":0,"c":"w","d":1150},{"p":".W.....................................wb.................B..... b","s":["40-49"],"b":0,"c":"b","d":1000},{"p":"..........................w.W...............B................... w","s":["26-19"],"b":0,"c":"w","d":1000},{"p":".......b.............b.bb.w.b.b........ww.....w......w..w....... b","s":["30-37","56-49","37-55","53-46","55-37"],"b":0,"c":"b","d":1300},{"p":".b...b....w.b........b......................b....w.....ww.w...w. w","s":["10-3"],"b":0,"c":"w","d":1000},{"p":"........b.....b......b....b..........w.w..w............w........ b","s":["14-23","39-30","21-39"],"b":0,"c":"b","d":1150},{"p":"........b.b.b.b......b.bw.....b......b.w..w.w....w...w.w........ w","s":["42-35","37-51","35-28","21-35","39-21-3-17-44-58"],"b":1,"c":"w","d":1550},{"p":".................b...b..w.....................b....w............ b","s":["17-26"],"b":0,"c":"b","d":1000},{"p":".b...b.bb.b...b........b...........b...ww........w...w.w..w.w.w. b","s":["35-44","53-35","23-30","39-21","14-28-42-56"],"b":1,"c":"b","d":1550},{"p":"...b...b......b....b.b.bb............w.bw...w....w.w...ww.....w. w","s":["37-30","23-37","44-30-12-26"],"b":1,"c":"w","d":1400},{"p":".......bb........................w.w........w..........b........ b","s":["55-62","33-24","62-55","24-17","8-26"],"b":0,"c":"b","d":1300},{"p":".b......b...b.b....b...b..b...b..w...w.bw.w.w......w.w.w....w... w","s":["37-28","19-37","33-19-5"],"b":1,"c":"w","d":1400},{"p":"...................b...bb...b.b..w...w....w.w.w................. b","s":["30-39","44-35","39-53"],"b":0,"c":"b","d":1150},{"p":".......b.........b.w...b......b........bb.w..........w.w........ b","s":["17-26","19-33","40-26","53-44","30-37"],"b":0,"c":"b","d":1300},{"p":".....................b.b....b.b........ww.....w.........w.w..... b","s":["30-37","40-33","37-55"],"b":0,"c":"b","d":1150},{"p":".b.....bb.b.b.b..b...b.bw...b......w......w.w.w..w.w....w.w...w. w","s":["44-37"],"b":0,"c":"w","d":1000},{"p":".......b..b...b..b.b.b....b......w.w...ww...w....w..........w... b","s":["21-30","39-21","14-28-42-56"],"b":1,"c":"b","d":1400},{"p":".b......b........b.b.b.b..b......w.w.w..w...w....w......w....... b","s":["17-24","35-17","8-26"],"b":0,"c":"b","d":1150},{"p":"...b......b...b....b.b.bw.b.b....w...w.ww.....w..w.....w........ b","s":["3-12","49-42","26-35"],"b":0,"c":"b","d":1150},{"p":"............b.b....b.b.bb.b...b......w.ww.w.w.w......w..w....... w","s":["42-35","24-33","35-17","33-42","17-10"],"b":0,"c":"w","d":1300},{"p":".......Wb........b........w........................w....B....... w","s":["26-19"],"b":0,"c":"w","d":1000},{"p":".....................B.wb.W...............w..................... w","s":["26-35"],"b":0,"c":"w","d":1000},{"p":".B...W..................w..........w...................b........ b","s":["55-62"],"b":0,"c":"b","d":1000},{"p":"..........b.b....b.b.b.bb.b...b..w...w.ww.w.w.w..w...w..w....... w","s":["37-28"],"b":0,"c":"w","d":1000},{"p":"........b.b...b..b......w.b........w....w...w....w.............. w","s":["49-42","10-19","24-10-28","8-17","28-21","14-28","35-21"],"b":0,"c":"w","d":1450},{"p":".......b................b............b..w..........w......w..... b","s":["37-46"],"b":0,"c":"b","d":1000},{"p":".......b.........b.....bB............w.................ww...W... w","s":["56-49","7-14","37-30","23-37","49-42","24-51","60-24-10-46"],"b":0,"c":"w","d":1450},{"p":".b......b.....b..b.b...b..b.b....w...w..w...w.w..w.w....w....... b","s":["26-35","44-26-12","17-24","37-19","24-42-60-39-3"],"b":1,"c":"b","d":1550},{"p":".b........b.b.b........b..b.b...........w.w.w....w.....bw...w... w","s":["42-35","28-42","49-35-17-3-21-7"],"b":1,"c":"w","d":1400},{"p":".b.....b..b.b...........b.b.b.b........bw.w......w.w...ww...w... w","s":["42-33"],"b":1,"c":"w","d":1250},{"p":".b.b...bb...b.b..b.b....b.....b..w.w......w...w..w.w.w..w.w...w. w","s":["35-26","17-35","42-28-10","24-42-60","62-55","1-19","46-39"],"b":1,"c":"w","d":1700},{"p":"...b.b.b..b.b....b...b.b.............w..b.w.w....w...w.w..w.w.w. w","s":["37-28","21-35","44-26-8","10-17","8-26","12-19","26-12"],"b":1,"c":"w","d":1700},{"p":"..............b......b......w......w....b...............w....... w","s":["28-19"],"b":0,"c":"w","d":1000},{"p":"...b...b......b....b...bb.b...b..w...w..w.w.w.w..w............w. b","s":["30-39","62-53","14-21","37-28","19-37-55"],"b":0,"c":"b","d":1300},{"p":"...b.b.bb.b.b.b....b.b.bb.b......w...w.ww.w........w.w.ww.w.w.w. w","s":["39-30","21-39","37-28","19-37","33-19-1","37-46","55-37"],"b":1,"c":"w","d":1700},{"p":".......b...............b....b..........wb.....w........w..w..... w","s":["46-37","28-46","55-37"],"b":0,"c":"w","d":1150},{"p":".....b..b...b........b.bb.w...b..w.w....w.w.w..........w........ b","s":["30-37","44-30","23-37","26-19","12-26-44"],"b":0,"c":"b","d":1300},{"p":".b...b..b.b.b.b....b.b.bw.b.............w.w.w.w..w...w..w...w.w. b","s":["26-33","40-26","19-33-51-37-55"],"b":1,"c":"b","d":1400},{"p":".......b...........w....b...............b..........w.b.ww....... b","s":["53-60","19-10","60-42","10-1","40-49"],"b":0,"c":"b","d":1300},{"p":".b...b.bb.b...b..b.b.b..w.....b..w.w....w...w.w..w.w...w..w..... b","s":["19-26","33-19","10-28-42-60-39","24-10","1-19"],"b":1,"c":"b","d":1550},{"p":".......bb........b.b.b.b..b......w.w...ww...w........w..w....... b","s":["17-24","35-17","8-26","53-46","24-42"],"b":0,"c":"b","d":1300},{"p":"...b.b......b....b.b.b.bb.....b......w.bw.w.w.w....w.w.ww...w... b","s":["21-28","42-35","28-42","51-33","24-42","40-33","42-24"],"b":0,"c":"b","d":1450},{"p":"...b...b..b.b.b..b...b.bb.b.............w.w......w.w...ww...w.w. w","s":["42-33"],"b":1,"c":"w","d":1250},{"p":".......bb..........b...bb........w.w.w....w..................... b","s":["23-30","37-23","8-17","33-26","19-33-51"],"b":1,"c":"b","d":1550},{"p":".....b..b...b.b..b.b.b.............w.b.ww........w...w.ww...w... w","s":["35-28","21-35","53-44","35-53","60-46-28-10-24"],"b":1,"c":"w","d":1550},{"p":"............b.b......b.b......b......w.wb...w........w.ww....... w","s":["37-28","21-35","39-21-3"],"b":1,"c":"w","d":1400},{"p":".......b....b.b..b...b........w....w...w....................w... b","s":["14-23","60-51","23-37"],"b":0,"c":"b","d":1150},{"p":".......bb.b.b......b.b..w.b......w.b.w..w........w.w...w....w... w","s":["37-28","19-37","33-19-5"],"b":1,"c":"w","d":1400},{"p":".b.....bb.b...b....b...............b...bw............w.ww.w.w.w. w","s":["53-46","39-53","62-44-26-12","14-21","12-30"],"b":1,"c":"w","d":1550},{"p":".......b...........b...w...........b.b.ww............w....w..... w","s":["58-51","37-46","51-44","46-60","44-26-12"],"b":0,"c":"w","d":1300},{"p":".b.b...bb.b.b.b....b...b..b......w...w..w........w.w.w..w.w.w.w. w","s":["37-28","19-37","33-19-5"],"b":1,"c":"w","d":1400},{"p":"..........b.b....b.b.b.bw.b......w...w.ww........w.w............ w","s":["39-30","21-39","37-28","19-37","33-19-1","39-46","24-10"],"b":1,"c":"w","d":1700},{"p":".....b........b..w.b.b.bb...b........b.w..w........w.w.ww.....w. w","s":["53-44","24-10","44-30-12-26","10-19","26-12"],"b":1,"c":"w","d":1550},{"p":".b.b.b..b...b......b.b....b......w...w..w.w..........w.ww.....w. b","s":["19-28","37-19","21-28","19-37","3-10","33-19","10-28-46-60-24"],"b":1,"c":"b","d":1700},{"p":".....b.bb.b...b......b.b..b...b....w.w.ww...w....w.w.w......w... b","s":["26-33","40-26","10-19","26-12","21-3","39-21","14-28-42-56"],"b":1,"c":"b","d":1700},{"p":".b...............b...b..b........w........w......w......w....... w","s":["33-26","17-35","42-28-14"],"b":1,"c":"w","d":1400},{"p":".b.....bb.b...b....b.b.b..b.b....w...w.bw.w.w.w..w.w.w.ww....... b","s":["21-30"],"b":0,"c":"b","d":1000},{"p":"........b.w...b......b....w.b.b..w......w.w............b........ w","s":["26-17","8-26","33-19-37-23-5"],"b":1,"c":"w","d":1400},{"p":"...................b.b.b..b........w...wb...w...........w....... b","s":["26-33","35-26","21-28","26-12","28-35","44-26","33-19-5"],"b":0,"c":"b","d":1450},{"p":".....b..b.b...b..b.b.b.bw.b......w...w.ww........w......w.w.w... w","s":["39-30","21-39","37-28","19-37","33-19-1","39-46","24-10"],"b":1,"c":"w","d":1700},{"p":".b.....bb.b..........b.bw.b...b......w.w....w.w....w.w..w.w..... b","s":["26-35","44-26","30-44-62","26-17","8-26"],"b":1,"c":"b","d":1550},{"p":".b......b..............b..w...b....w.w.b..w......w.w............ w","s":["51-44","39-46","37-55"],"b":0,"c":"w","d":1150},{"p":"........b.....b..w.b...b..b..........w..w........w.............. b","s":["26-35","17-10","19-1","49-42","35-49","40-58","14-21"],"b":0,"c":"b","d":1450},{"p":"...................................................b........W.B. b","s":["51-58"],"b":0,"c":"b","d":1000},{"p":"..........b......b.....bw..........b...bw..........w...w......w. w","s":["55-46","39-53","62-44-26-8","10-19","8-1"],"b":1,"c":"w","d":1550},{"p":"...b......b...b..b......b.b............ww.w.w.w..w.............. w","s":["44-35","26-44","46-37","44-30","39-21-7"],"b":1,"c":"w","d":1550}];
+let puzzle = null, startTurn = 'w';
+const Tr = () => window.gambitTrain;
+function startTactic() {
+  if (thinking || !CK_TACTICS.length) return;
+  abandonRated();
+  if (online()) net.leave();
+  const prevMode = puzzle ? puzzle.prevMode : modeSel.value === 'online' ? 'ai' : modeSel.value;
+  const idx = Tr().pick(CK_TACTICS, 'checkers'), p = CK_TACTICS[idx], [bd, turn] = p.p.split(' ');
+  modeSel.value = 'pvp';
+  reset();
+  S = { b: bd.split('').map(c => (c === '.' ? null : c)), turn, kc: 0 }; startTurn = turn;
+  puzzle = { idx, line: p.s, color: p.c, d: p.d || 1200, brill: !!p.b, k: 0, state: 'play', msg: '', prevMode, failed: false };
+  flipped = p.c === 'b';
+  render();
+}
+window.gambitCkTrain = startTactic;
+function exitPuzzle() {
+  if (!puzzle) return;
+  modeSel.value = puzzle.prevMode;
+  reset();
+}
+function puzzleTry(m) {
+  const pz = puzzle;
+  if (m.path.join('-') === pz.line[pz.k]) { pz.k++; pz.msg = ''; return true; }
+  // Leaving the opponent without a move wins as well
+  if (!genMoves(apply(S.b, m), opp(S.turn)).length) { pz.k = pz.line.length; return true; }
+  pz.msg = 'bad'; pz.failed = true; fx.sound('wrong');
+  sel = null; targets = [];
+  render();
+  return false;
+}
+function puzzleAfter() {
+  const pz = puzzle;
+  if (!pz || pz.state !== 'play') return;
+  if (pz.k >= pz.line.length) { finishPuzzle(true); return; }
+  pz.msg = 'good'; render();
+  setTimeout(() => {
+    if (puzzle !== pz || pz.state !== 'play') return;
+    const r = genMoves(S.b, S.turn).find(x => x.path.join('-') === pz.line[pz.k]);
+    if (!r) { finishPuzzle(true); return; }
+    pz.k++; play(r, true);
+  }, 450);
+}
+function finishPuzzle(solved) {
+  const pz = puzzle;
+  if (!pz || pz.state === 'solved' || pz.state === 'shown') return;
+  pz.state = solved ? 'solved' : 'shown';
+  pz.delta = Tr().rate('checkers', pz.idx, pz.d, solved && !pz.failed);
+  if (solved) { fx.sound(pz.failed ? 'end' : 'win'); if (!pz.failed) fx.confetti(false); }
+  render();
+}
+function showSolution() {
+  const pz = puzzle;
+  if (!pz || pz.state !== 'play') return;
+  pz.state = 'showing'; pz.msg = '';
+  const step = () => {
+    if (puzzle !== pz) return;
+    const m = pz.k < pz.line.length && genMoves(S.b, S.turn).find(x => x.path.join('-') === pz.line[pz.k]);
+    if (!m) { pz.state = 'play'; finishPuzzle(false); return; }
+    pz.k++; play(m, true);
+    setTimeout(step, 650);
+  };
+  step();
+}
+function renderPuzzle() {
+  const el = $('ckPuzzleBar');
+  if (!puzzle) { el.hidden = true; return; }
+  el.hidden = false;
+  const pz = puzzle, st = Tr().stats('checkers'), d = pz.delta > 0 ? '+' + pz.delta : String(pz.delta);
+  const done = pz.state === 'solved' || pz.state === 'shown';
+  let msg = '';
+  if (pz.state === 'solved') msg = `<div class="pm good">${t(pz.failed ? 'trTacFail' : 'trTacOk', { d })}</div>`;
+  else if (pz.state === 'shown') msg = `<div class="pm">${t('trTacShown', { d })}</div>`;
+  else if (pz.msg === 'bad') msg = `<div class="pm bad">${t('pzWrong')}</div>`;
+  else if (pz.msg === 'good') msg = `<div class="pm good">${t('pzRight')}</div>`;
+  el.innerHTML = `<div class="pt">${t('trTacTitle', { r: st.r, s: st.streak })}</div>
+    <div class="pm">${t(pz.color === 'w' ? 'turnW' : 'turnB')}. ${t('trCkTask')}${pz.brill ? ' ' + t('pzBrill') : ''}</div>${msg}
+    <div class="btns">${pz.state === 'play' ? `<button class="b" data-pz="show">${t('pzShow')}</button>` : ''}${done ? `<button class="b primary" data-pz="next">${t('trNext')}</button>` : ''}<button class="b" data-pz="exit">${t('pzExit')}</button></div>`;
+}
+
 function reset() {
   S = { b: initBoard(), turn: 'w', kc: 0 };
-  report = null; anToken++; view = null; resigned = null; ext = null; slideMv = null;
+  report = null; anToken++; view = null; resigned = null; ext = null; slideMv = null; puzzle = null; startTurn = 'w';
   hist = []; sel = null; targets = []; thinking = false;
   newRating(); setNote(''); adminHint = null; brillMark = null;
   flipped = online() ? net.color() === 'b' : modeSel.value === 'ai' && sideSel.value === 'b';
@@ -3831,6 +4106,8 @@ function reset() {
 }
 
 function play(m, remote) {
+  const pzMove = !!(puzzle && puzzle.state === 'play' && !remote);
+  if (pzMove && !puzzleTry(m)) return;
   const kingMove = isKing(S.b[m.from]);
   hist.push({ b: S.b, turn: S.turn, kc: S.kc, m, san: notation(m) });
   if (S.turn !== aiColor()) { const ply = hist.length - 1; setTimeout(() => checkBrilliant(ply, m), 30); }
@@ -3841,8 +4118,9 @@ function play(m, remote) {
   fx.sound(m.caps.length ? 'capture' : 'move');
   slideMv = { from: m.from, to: m.to };
   sel = null; targets = []; view = null;
-  if (result().over) { gameOver(); return; }
+  if (result().over) { gameOver(); if (pzMove) puzzleAfter(); return; }
   render(); maybeAI(); maybeAuto();
+  if (pzMove) puzzleAfter();
 }
 
 function maybeAI() {
@@ -3897,6 +4175,7 @@ function loadRecord(e) {
 
 function onSquare(i) {
   if (thinking || autoBusy) return;
+  if (puzzle && (puzzle.state !== 'play' || S.turn !== puzzle.color)) return;
   if (view !== null) { showPly(null); return; }
   const res = result();
   if (res.over || S.turn === aiColor() || (online() && S.turn !== net.color())) return;
@@ -3962,16 +4241,20 @@ function render() {
       const q = report && report.plies[i], mk = q && MARK[q.cls] ? `<span class="mk ${q.cls}">${MARK[q.cls]}</span>` : '';
       return `<button class="mv${i === lastIdx ? ' cur' : ''}" data-ply="${i}">${hist[i].san}${mk}</button>`;
     };
+    // A puzzle can start with Black to move: the first row then has an empty White cell
+    const off = startTurn === 'b' ? 1 : 0;
     let s = '';
-    for (let i = 0; i < hist.length; i += 2) {
-      s += `<span class="n">${i / 2 + 1}.</span>${cell(i)}${hist[i + 1] ? cell(i + 1) : '<span></span>'}`;
+    for (let j = 0; j < hist.length + off; j += 2) {
+      const i = j - off;
+      s += `<span class="n">${j / 2 + 1}.</span>${i >= 0 ? cell(i) : '<span>…</span>'}${hist[i + 1] ? cell(i + 1) : '<span></span>'}`;
     }
     mv.innerHTML = s;
     if (view === null) mv.scrollTop = mv.scrollHeight;
   }
   renderReview();
   renderReport();
-  $('ckUndo').disabled = thinking || !hist.length || online();
+  $('ckUndo').disabled = thinking || !hist.length || online() || !!puzzle;
+  renderPuzzle();
   $('ckResign').disabled = thinking || !hist.length || res.over || (online() && !net.active());
   const inGame = online() && (net.active() || net.spectating());
   $('ckNew').textContent = t(inGame ? 'rmBtn' : 'newg');
@@ -4009,6 +4292,13 @@ $('ckNew').addEventListener('click', () => {
   reset();
 });
 $('ckResign').addEventListener('click', resign);
+$('ckPuzzleBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-pz]');
+  if (!b) return;
+  if (b.dataset.pz === 'show') showSolution();
+  else if (b.dataset.pz === 'next') startTactic();
+  else exitPuzzle();
+});
 $('ckUndo').addEventListener('click', undo);
 for (const id of ['ckMoves', 'ckRepBody']) {
   $(id).addEventListener('click', e => {
