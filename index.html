@@ -588,22 +588,23 @@ window.gambitAuth = (() => {
     return COUNTRIES.includes(c) ? c : '';
   }
   // Standard Elo: K = 40 for the first 20 games, then 20. Against a bot (`floor` > 0) any gain is
-  // worth half as much again and a win is worth at least `floor`, which grows with the bot's
-  // strength; losses stay as they are. Never more than 40, the cap the database rules enforce.
-  function eloDelta(game, oppElo, score, floor) {
+  // multiplied by `boost` and a win is worth at least `floor`, both growing with the bot's
+  // strength; losses stay as they are. Never more than 60, the cap the database rules enforce.
+  const ELO_CAP = 60;
+  function eloDelta(game, oppElo, score, floor, boost = 1.5) {
     const old = eloOf(profile, game), n = ratedOf(profile, game);
     const K = n < 20 ? 40 : 20;
     const expected = 1 / (1 + Math.pow(10, (oppElo - old) / 400));
     let d = Math.round(K * (score - expected));
-    if (floor && d > 0) d = Math.round(d * 1.5);
+    if (floor && d > 0) d = Math.round(d * boost);
     if (score === 1 && floor) d = Math.max(d, floor);
-    d = Math.min(40, d);
+    d = Math.max(-ELO_CAP, Math.min(ELO_CAP, d));
     return Math.max(100, Math.min(3500, old + d)) - old;
   }
-  async function rate(game, oppElo, score, floor = 0) {
+  async function rate(game, oppElo, score, floor = 0, boost = 1.5) {
     if (!(user && profile && !profile.banned)) return null;
     const old = eloOf(profile, game), n = ratedOf(profile, game);
-    const next = old + eloDelta(game, oppElo, score, floor);
+    const next = old + eloDelta(game, oppElo, score, floor, boost);
     const elo = { chess: eloOf(profile, 'chess'), checkers: eloOf(profile, 'checkers'), [game]: next };
     const rated = { chess: ratedOf(profile, 'chess'), checkers: ratedOf(profile, 'checkers'), [game]: n + 1 };
     try {
@@ -879,8 +880,8 @@ window.gambitAuth = (() => {
     refresh: async () => { if (user) { await loadProfile(user); renderAcct(); } },
     badge, rate,
     // What a win, a draw and a loss would do to the rating right now
-    preview: (game, oppElo, floor) => (user && profile && !profile.banned
-      ? { w: eloDelta(game, oppElo, 1, floor), d: eloDelta(game, oppElo, 0.5, floor), l: eloDelta(game, oppElo, 0, floor) }
+    preview: (game, oppElo, floor, boost) => (user && profile && !profile.banned
+      ? { w: eloDelta(game, oppElo, 1, floor, boost), d: eloDelta(game, oppElo, 0.5, floor, boost), l: eloDelta(game, oppElo, 0, floor, boost) }
       : null),
     canPlay: () => !!(user && profile && !profile.banned && user.emailVerified),
     verified: () => !!(user && user.emailVerified),
@@ -1919,9 +1920,12 @@ function myRatedColor() {
   return rs.mode === 'ai' ? rs.side : null;
 }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
-// Smallest win against a bot: 4 for the 400 bot up to 20 for the 2000 bot
-const botFloor = elo => Math.round(elo / 100);
+// Smallest win against a bot: rating / 100 (+4 up to +16), and +50 for the impossible bot
+const botFloor = elo => (elo >= 2000 ? 50 : Math.round(elo / 100));
+// Gains against a bot count half as much again; against the impossible bot, three times
+const botBoost = elo => (elo >= 2000 ? 3 : 1.5);
 const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
+const ratedBoost = () => (rs.mode === 'ai' ? botBoost(BOT_ELO[rs.level] || 1000) : 1);
 function noteFor(r, key) {
   if (!r) return '';
   if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
@@ -1940,7 +1944,7 @@ function finishRated() {
   const winner = { mateW: 'w', resB: 'w', mateB: 'b', resW: 'b' }[key];
   const score = winner ? (winner === me ? 1 : 0) : 0.5;
   setNote(t('rtSaving'));
-  A().rate('chess', ratedOppElo(), score, ratedFloor()).then(r => setNote(noteFor(r, 'rtResult')));
+  A().rate('chess', ratedOppElo(), score, ratedFloor(), ratedBoost()).then(r => setNote(noteFor(r, 'rtResult')));
 }
 // ---------- Best-move hint (admin only) ----------
 // Full engine strength without the bot's randomness
@@ -2264,7 +2268,7 @@ function render() {
   sideSel.disabled = online() && net.active();
   $('onlineBox').hidden = !online();
   {
-    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('chess', be, botFloor(be));
+    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('chess', be, botFloor(be), botBoost(be));
     const sg = d => (d > 0 ? '+' + d : d < 0 ? '−' + -d : '±0');
     $('botElo').textContent = t('rtBot', { e: be }) + (pv ? ' · ' + t('rtOdds', { w: sg(pv.w), d: sg(pv.d), l: sg(pv.l) }) : '');
   }
@@ -2580,9 +2584,12 @@ let rs = {}, ratingNote = '';
 function newRating() { rs = { mode: modeSel.value, side: sideSel.value, level: levelSel.value, unrated: '', done: false }; }
 function myRatedColor() { return rs.mode === 'online' ? net.color() : rs.mode === 'ai' ? rs.side : null; }
 const ratedOppElo = () => (rs.mode === 'online' ? net.oppElo() : BOT_ELO[rs.level] || 1000);
-// Smallest win against a bot: 4 for the 400 bot up to 20 for the 2000 bot
-const botFloor = elo => Math.round(elo / 100);
+// Smallest win against a bot: rating / 100 (+4 up to +16), and +50 for the impossible bot
+const botFloor = elo => (elo >= 2000 ? 50 : Math.round(elo / 100));
+// Gains against a bot count half as much again; against the impossible bot, three times
+const botBoost = elo => (elo >= 2000 ? 3 : 1.5);
 const ratedFloor = () => (rs.mode === 'ai' ? botFloor(BOT_ELO[rs.level] || 1000) : 0);
+const ratedBoost = () => (rs.mode === 'ai' ? botBoost(BOT_ELO[rs.level] || 1000) : 1);
 function noteFor(r, key) {
   if (!r) return '';
   if (r.error) return t(r.error === 'fast' ? 'rtFast' : 'rtFail');
@@ -2599,7 +2606,7 @@ function finishRated() {
   const key = result().key;
   const score = key === 'ckDraw' ? 0.5 : (key === 'ckWinW') === (me === 'w') ? 1 : 0;
   setNote(t('rtSaving'));
-  A().rate('checkers', ratedOppElo(), score, ratedFloor()).then(r => setNote(noteFor(r, 'rtResult')));
+  A().rate('checkers', ratedOppElo(), score, ratedFloor(), ratedBoost()).then(r => setNote(noteFor(r, 'rtResult')));
 }
 // Best-move hint (admin only)
 // ---------- Brilliant move, live (same test as the report) ----------
@@ -2944,7 +2951,7 @@ function render() {
   sideSel.disabled = online() && net.active();
   $('ckOnlineBox').hidden = !online();
   {
-    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('checkers', be, botFloor(be));
+    const be = BOT_ELO[levelSel.value], pv = A() && A().preview && A().preview('checkers', be, botFloor(be), botBoost(be));
     const sg = d => (d > 0 ? '+' + d : d < 0 ? '−' + -d : '±0');
     $('ckBotElo').textContent = t('rtBot', { e: be }) + (pv ? ' · ' + t('rtOdds', { w: sg(pv.w), d: sg(pv.d), l: sg(pv.l) }) : '');
   }
