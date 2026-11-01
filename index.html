@@ -284,6 +284,15 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
 .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .sq.drop .pc { animation: none; } }
+.board-pick { display: flex; align-items: center; gap: 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.board-pick select { font: inherit; font-size: .85rem; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.online .clock { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+/* Board themes: they change only the squares and the frame, so pieces stay readable in all of them */
+:root[data-board="wood"] { --sq-light: #ecd3a8; --sq-dark: #b07a4a; --frame: #5b3a1f; }
+:root[data-board="green"] { --sq-light: #eeeed2; --sq-dark: #769656; --frame: #36452a; }
+:root[data-board="marble"] { --sq-light: #e6e6e1; --sq-dark: #9b9a93; --frame: #3b3b38; }
+:root[data-board="ocean"] { --sq-light: #d5edf2; --sq-dark: #3d8ca1; --frame: #173f4a; }
+:root[data-board="rose"] { --sq-light: #f5e1e5; --sq-dark: #c47d8e; --frame: #57303b; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -300,6 +309,16 @@ button.b.danger { border-color: var(--danger); color: var(--danger); }
     </nav>
     <div class="tag" data-t="tag">Шахматы по всем правилам: рокировка, взятие на проходе, превращение пешки</div>
     <div class="acct" id="acct" hidden></div>
+    <label class="board-pick" for="boardTheme"><span data-t="bdLabel">Доска</span>
+      <select id="boardTheme">
+        <option value="steel" data-t="bdSteel">Сталь</option>
+        <option value="wood" data-t="bdWood">Дерево</option>
+        <option value="green" data-t="bdGreen">Турнир</option>
+        <option value="marble" data-t="bdMarble">Мрамор</option>
+        <option value="ocean" data-t="bdOcean">Океан</option>
+        <option value="rose" data-t="bdRose">Роза</option>
+      </select>
+    </label>
     <div class="lang" role="group" aria-label="Язык / Language">
       <button class="b" id="langRu" data-lang="ru">RU</button>
       <button class="b" id="langEn" data-lang="en">EN</button>
@@ -836,7 +855,7 @@ window.gambitNet = (() => {
 
   function create(game, box, cb) {
     let state = 'idle', code = '', myColor = null, opp = null, err = '', copied = false, unsub = null, ref = null;
-    let pushing = false, pushAgain = false, pushTries = 0, sending = false, watchTimer = null;
+    let pushing = false, pushAgain = false, pushTries = 0, sending = false, watchTimer = null, matchedGame = false;
     const roomKey = 'gambit-room-' + game;
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -888,6 +907,7 @@ window.gambitNet = (() => {
 
     async function host(side) {
       if (!A.canPlay()) { A.prompt(() => host(side)); return; }
+      matchedGame = false;
       setState('opening');
       await A.refresh();
       const db = A.db(), me = A.user().uid, nick = A.profile().nick;
@@ -927,7 +947,96 @@ window.gambitNet = (() => {
       } catch (e) { fail(A.errText(e)); }
     }
 
-    function leave() { stop(); forget(); myColor = null; pushAgain = false; setState('idle'); }
+    // ---------- Matchmaking ----------
+    // Each player puts a ticket in the queue. Of two compatible players, the one with the smaller id
+    // opens the game and hands its code to the other in one transaction, so nobody is paired twice.
+    let mm = null; // { start, ticks, timer, unsub, scanning }
+    const STALE = 120000;
+    // Rating window: ±100 at first, 20 points wider every second of waiting, up to ±1000
+    const rangeFor = secs => Math.min(1000, 100 + Math.round(secs * 20));
+    function stopSearch(keepTicket) {
+      if (!mm) return;
+      clearInterval(mm.timer);
+      if (mm.unsub) mm.unsub();
+      if (!keepTicket && A.user()) A.db().collection('queue').doc(A.user().uid).delete().catch(() => {});
+      mm = null;
+    }
+    async function findMatch() {
+      if (!A.canPlay()) { A.prompt(() => findMatch()); return; }
+      stop(); forget(); err = ''; matchedGame = false;
+      setState('searching');
+      await A.refresh();
+      const db = A.db(), me = A.user().uid, qref = db.collection('queue').doc(me);
+      try {
+        await qref.delete().catch(() => {});
+        await qref.set({ game, elo: A.elo(game), nick: A.profile().nick, country: A.country(), admin: A.isAdmin(), createdAt: A.ts(), matched: null });
+      } catch (e) { fail(A.errText(e)); return; }
+      if (state !== 'searching') { qref.delete().catch(() => {}); return; }
+      mm = { start: Date.now(), ticks: 0, scanning: false };
+      // Someone else may open the game for us: their code arrives on our ticket
+      mm.unsub = qref.onSnapshot(snap => {
+        const d = snap.data();
+        if (d && d.matched && state === 'searching') { const c = d.matched; stopSearch(false); join(c); }
+      }, () => {});
+      mm.timer = setInterval(() => {
+        if (!mm || state !== 'searching') return;
+        mm.ticks++;
+        draw();
+        if (mm.ticks % 3 === 0) scan();
+      }, 1000);
+      scan();
+    }
+    async function scan() {
+      if (!mm || mm.scanning || state !== 'searching') return;
+      mm.scanning = true;
+      try {
+        const db = A.db(), me = A.user().uid, myElo = A.elo(game), now = Date.now();
+        const snap = await db.collection('queue').where('game', '==', game).where('matched', '==', null).get();
+        const waited = (now - mm.start) / 1000;
+        const cands = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(c => c.id !== me && me < c.id && c.createdAt && now - c.createdAt.toMillis() < STALE)
+          .filter(c => Math.abs(c.elo - myElo) <= rangeFor(Math.max(waited, (now - c.createdAt.toMillis()) / 1000)))
+          .sort((a, b) => Math.abs(a.elo - myElo) - Math.abs(b.elo - myElo));
+        for (const c of cands) {
+          if (!mm || state !== 'searching') break;
+          if (await claim(c.id)) return;
+        }
+      } catch (e) {
+      } finally {
+        if (mm) mm.scanning = false;
+      }
+    }
+    async function claim(otherId) {
+      const db = A.db(), me = A.user().uid;
+      const myQ = db.collection('queue').doc(me), theirQ = db.collection('queue').doc(otherId);
+      const newCode = makeCode(), gref = db.collection('games').doc(newCode);
+      const side = Math.random() < 0.5 ? 'w' : 'b';
+      try {
+        await db.runTransaction(async tx => {
+          const mine = await tx.get(myQ), theirs = await tx.get(theirQ);
+          if (!mine.exists || mine.data().matched || !theirs.exists || theirs.data().matched) throw new Error('taken');
+          tx.set(gref, {
+            game, host: me, hostNick: A.profile().nick, hostColor: side, guest: null, guestNick: null,
+            hostElo: A.elo(game), hostCountry: A.country(), hostAdmin: A.isAdmin(),
+            round: 0, moves: [], resigned: null, createdAt: A.ts(), updatedAt: A.ts()
+          });
+          tx.update(theirQ, { matched: newCode });
+          tx.delete(myQ);
+        });
+      } catch (e) {
+        return false;
+      }
+      stopSearch(true); // our ticket went away in the transaction
+      code = newCode; ref = gref; copied = false; matchedGame = true;
+      remember(); setState('waiting'); watch();
+      // The other player closed the page before joining: go back to the queue
+      setTimeout(() => {
+        if (state === 'waiting' && ref === gref && matchedGame) { stop(); forget(); findMatch(); }
+      }, 20000);
+      return true;
+    }
+
+    function leave() { stopSearch(false); matchedGame = false; stop(); forget(); myColor = null; pushAgain = false; setState('idle'); }
 
     // Send the whole game; on a failure try again with a growing pause, and send the newest
     // state if more moves were made meanwhile
@@ -960,7 +1069,18 @@ window.gambitNet = (() => {
         h = `<div class="warn">${t('onBanned')}</div>`;
       } else if (state === 'idle' || state === 'error') {
         if (state === 'error') h += `<div class="warn">${esc(t('onError', { e: err }))}</div>`;
-        h += `<div class="row"><button class="b primary" data-act="host">${t('onCreate')}</button></div>` + joinForm;
+        h += `<div class="row"><button class="b primary" data-act="find">${t('onFind')}</button></div>
+          <div class="muted">${t('onFindHint')}</div>
+          <div class="row"><button class="b" data-act="host">${t('onCreate')}</button></div>` + joinForm;
+      } else if (state === 'searching') {
+        const secs = mm ? Math.floor((Date.now() - mm.start) / 1000) : 0;
+        const clock = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+        h += `<div class="ok">${t('onSearching')} <span class="clock">${clock}</span></div>
+          <div class="muted">${t('onRange', { r: rangeFor(secs) })}</div>
+          <div class="row"><button class="b" data-act="leave">${t('cancel')}</button></div>`;
+      } else if (state === 'waiting' && matchedGame) {
+        h += `<div class="ok">${t('onFound')}</div><div class="muted">${t('onFoundWait')}</div>
+          <div class="row"><button class="b" data-act="leave">${t('cancel')}</button></div>`;
       } else if (state === 'opening' || state === 'connecting') {
         h += `<div class="muted">${state === 'opening' ? t('onOpening') : esc(t('onConnecting', { c: code }))}</div>
           <div class="row"><button class="b" data-act="leave">${t('cancel')}</button></div>`;
@@ -985,6 +1105,7 @@ window.gambitNet = (() => {
       if (!b || b.tagName === 'FORM') return;
       const act = b.dataset.act;
       if (act === 'host') host(cb.side());
+      else if (act === 'find') findMatch();
       else if (act === 'leave') leave();
       else if (act === 'login') A.prompt();
       else if (act === 'copy') {
@@ -997,6 +1118,7 @@ window.gambitNet = (() => {
       join(box.querySelector('input').value);
     });
     document.addEventListener('gambit-lang', draw);
+    window.addEventListener('pagehide', () => { if (mm) stopSearch(false); });
     if (A) A.onChange(() => { if (A.banned() && state !== 'idle') leave(); else draw(); });
     draw();
 
@@ -1005,7 +1127,7 @@ window.gambitNet = (() => {
       color: () => (state === 'connected' ? myColor : null),
       oppElo: () => (opp && typeof opp.elo === 'number' ? opp.elo : 1000),
       active: () => state === 'connected',
-      waiting: () => state === 'waiting',
+      waiting: () => state === 'waiting' || state === 'searching',
       saved: () => { try { return sessionStorage.getItem(roomKey) || ''; } catch (e) { return ''; } }
     };
     hooks[game] = { session, enter: cb.enter };
@@ -1056,6 +1178,7 @@ const I18N = {
     prev: 'Предыдущий ход', next: 'Следующий ход', exit: 'К текущей позиции', board: 'Шахматная доска',
     mode: 'Режим', ai: 'Против компьютера', pvp: 'Вдвоём за одной доской', side: 'Играю за', white: 'Белых', black: 'Чёрных',
     gChess: 'Шахматы', gCheckers: 'Шашки',
+    bdLabel: 'Доска', bdSteel: 'Сталь', bdWood: 'Дерево', bdGreen: 'Турнир', bdMarble: 'Мрамор', bdOcean: 'Океан', bdRose: 'Роза',
     fxBrill: 'Бриллиантовый ход!', hintBrill: 'Бриллиантовый ход: {m} !!', hintBtn: 'Лучший ход', hintThinking: 'Считаю лучший ход…', hintIs: 'Лучший ход: {m}', rtHint: 'Партия без рейтинга: использована подсказка.',
     rtResult: 'Рейтинг: {a} → {b} ({d})', rtAbandon: 'Брошенная партия засчитана как поражение. Рейтинг: {a} → {b} ({d})',
     rtUndo: 'Партия без рейтинга: был отменён ход.', rtLevel: 'Партия без рейтинга: сложность меняли во время игры.',
@@ -1079,7 +1202,8 @@ const I18N = {
     adPlayers: 'Игроков всего', adActive: 'Заходили за сутки', adBannedN: 'Заблокировано', adToday: 'Партий сегодня', adWeek: 'Партий за неделю', adMonth: 'Партий за 30 дней',
     adJoined: 'Регистрация', adSeen: 'Был в сети', adGames: 'Партий', adStatus: 'Статус', adBannedOne: 'бан', adActiveOne: 'активен',
     adBan: 'Забанить', adUnban: 'Разбанить', adYou: 'это вы', adNone: 'Никого не найдено',
-    online: 'Онлайн с другом', onCreate: 'Создать игру', onJoin: 'Войти', onCodePh: 'Код игры', onOr: 'или войдите по коду друга',
+    online: 'Онлайн с другом', onCreate: 'Создать игру по коду', onFind: 'Найти соперника', onFindHint: 'Подберём игрока с похожим рейтингом.',
+    onSearching: 'Ищем соперника…', onRange: 'Рейтинг ±{r}: чем дольше ждём, тем шире круг.', onFound: 'Соперник найден!', onFoundWait: 'Подключаем его к партии…', onJoin: 'Войти', onCodePh: 'Код игры', onOr: 'или войдите по коду друга',
     onOpening: 'Подключение…', onConnecting: 'Ищем игру {c}…', onCode: 'Код игры', onCopy: 'Скопировать ссылку', onCopied: 'Ссылка скопирована',
     onWaiting: 'Отправьте другу код или ссылку. Друг тоже должен войти в аккаунт; игра начнётся сама.', onConnected: 'Соперник подключён. Вы играете за {c}.',
     onLost: 'Соперник пропал со связи. Ждём, пока он вернётся…', onError: 'Не удалось подключиться: {e}', onNoGame: 'игры с кодом {c} нет. Проверьте код',
@@ -1109,6 +1233,7 @@ const I18N = {
     prev: 'Previous move', next: 'Next move', exit: 'Back to the game', board: 'Chessboard',
     mode: 'Mode', ai: 'Against the computer', pvp: 'Two players, one board', side: 'I play', white: 'White', black: 'Black',
     gChess: 'Chess', gCheckers: 'Checkers',
+    bdLabel: 'Board', bdSteel: 'Steel', bdWood: 'Wood', bdGreen: 'Tournament', bdMarble: 'Marble', bdOcean: 'Ocean', bdRose: 'Rose',
     fxBrill: 'Brilliant move!', hintBrill: 'Brilliant move: {m} !!', hintBtn: 'Best move', hintThinking: 'Working out the best move…', hintIs: 'Best move: {m}', rtHint: 'Unrated game: a hint was used.',
     rtResult: 'Rating: {a} → {b} ({d})', rtAbandon: 'The abandoned game counts as a loss. Rating: {a} → {b} ({d})',
     rtUndo: 'Unrated game: a move was taken back.', rtLevel: 'Unrated game: the difficulty changed mid-game.',
@@ -1132,7 +1257,8 @@ const I18N = {
     adPlayers: 'Players', adActive: 'Seen in the last 24 h', adBannedN: 'Banned', adToday: 'Games today', adWeek: 'Games this week', adMonth: 'Games in 30 days',
     adJoined: 'Signed up', adSeen: 'Last seen', adGames: 'Games', adStatus: 'Status', adBannedOne: 'banned', adActiveOne: 'active',
     adBan: 'Ban', adUnban: 'Unban', adYou: 'you', adNone: 'Nobody found',
-    online: 'Online with a friend', onCreate: 'Create game', onJoin: 'Join', onCodePh: 'Game code', onOr: "or join with your friend's code",
+    online: 'Online with a friend', onCreate: 'Create a game by code', onFind: 'Find an opponent', onFindHint: 'We pair you with a player of similar rating.',
+    onSearching: 'Looking for an opponent…', onRange: 'Rating ±{r}: the longer the wait, the wider the search.', onFound: 'Opponent found!', onFoundWait: 'Bringing them into the game…', onJoin: 'Join', onCodePh: 'Game code', onOr: "or join with your friend's code",
     onOpening: 'Connecting…', onConnecting: 'Looking for game {c}…', onCode: 'Game code', onCopy: 'Copy link', onCopied: 'Link copied',
     onWaiting: 'Send your friend the code or link. They need to sign in too; the game starts by itself.', onConnected: 'Opponent connected. You play {c}.',
     onLost: 'Your opponent lost the connection. Waiting for them to come back…', onError: 'Could not connect: {e}', onNoGame: 'there is no game with the code {c}. Check the code',
@@ -2553,6 +2679,16 @@ function setGame(g) {
   try { localStorage.setItem('gambit-game', g); } catch (e) {}
 }
 for (const b of document.querySelectorAll('[data-game]')) b.addEventListener('click', () => setGame(b.dataset.game));
+
+// ---------- Board theme ----------
+const themeSel = $('boardTheme');
+try { const th = localStorage.getItem('gambit-board'); if (th && themeSel.querySelector(`[value="${th}"]`)) themeSel.value = th; } catch (e) {}
+function applyBoardTheme() {
+  document.documentElement.dataset.board = themeSel.value;
+  try { localStorage.setItem('gambit-board', themeSel.value); } catch (e) {}
+}
+themeSel.addEventListener('change', applyBoardTheme);
+applyBoardTheme();
 
 reset();
 let saved = 'chess';
